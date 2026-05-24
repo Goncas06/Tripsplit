@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Android build
+android/build/
+android/app/build/
+android/.gradle/
+android/.cxx/
+android/local.properties
+
+# iOS build
+ios/build/
+ios/Pods/
+ios/*.xcworkspace
+
+# Metro
+.metro-health-check*
+
+# Env
+.env
+.env.local
+.env.*
+
+# Editor
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build outputs
+build_log.txt
+
+# AI assistants
+.claude/
+.cursor/
+.aider*
