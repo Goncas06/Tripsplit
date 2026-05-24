@@ -33,7 +33,12 @@ export default function SaldosScreen() {
               <View style={styles.balanceInfo}>
                 <Text style={styles.balanceName}>{b.name}</Text>
                 <Text style={styles.balanceSub}>
-                  Pagou €{b.paid.toFixed(2)} · deve €{b.owes.toFixed(2)}
+                  <Text>Pagou €{b.paid.toFixed(2)} · </Text>
+                  {b.net > 0.01
+                    ? <Text style={{ color: '#2e7d32', fontWeight: '600' }}>A receber €{b.net.toFixed(2)}</Text>
+                    : b.net < -0.01
+                    ? <Text style={{ color: '#c62828', fontWeight: '600' }}>A pagar €{Math.abs(b.net).toFixed(2)}</Text>
+                    : <Text>Equilibrado</Text>}
                 </Text>
               </View>
               <View style={[styles.netBadge, b.net >= 0 ? styles.netPos : styles.netNeg]}>
