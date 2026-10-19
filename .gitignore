@@ -1,17 +1,18 @@
 # Dependencies
 node_modules/
 
-# Android build
-android/build/
-android/app/build/
-android/.gradle/
-android/.cxx/
-android/local.properties
+# Pastas nativas: geradas pelo Expo (npx expo prebuild), não são versionadas
+android/
+ios/
 
-# iOS build
-ios/build/
-ios/Pods/
-ios/*.xcworkspace
+# Configuração nativa do Firebase
+google-services.json
+GoogleService-Info.plist
+
+# Expo
+.expo/
+dist/
+web-build/
 
 # Metro
 .metro-health-check*
@@ -20,6 +21,7 @@ ios/*.xcworkspace
 .env
 .env.local
 .env.*
+!.env.example
 
 # Editor
 .vscode/
