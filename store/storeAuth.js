@@ -5,9 +5,23 @@ import {
   signOut,
   updateProfile,
   onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithCredential,
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import Constants from 'expo-constants';
 import { auth, db } from '../utils/firebase';
+import { useTripStore } from './storeViagens';
+
+// O Expo Go não inclui o módulo nativo do Google Sign-In — só é carregado em builds próprias
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+const GoogleSignin = isExpoGo
+  ? null
+  : require('@react-native-google-signin/google-signin').GoogleSignin;
+
+GoogleSignin?.configure({
+  webClientId: '927132450855-bah2imv0j7dbqfrqlo66vcdrhtl9q5v7.apps.googleusercontent.com',
+});
 
 const useAuthStore = create((set) => ({
   user: null,
@@ -17,6 +31,7 @@ const useAuthStore = create((set) => ({
   // Retorna a função de cleanup (unsubscribe)
   initAuth: () => {
     return onAuthStateChanged(auth, (firebaseUser) => {
+      useTripStore.getState().reset();
       if (firebaseUser) {
         set({
           user: {
@@ -36,6 +51,8 @@ const useAuthStore = create((set) => ({
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       await updateProfile(cred.user, { displayName: name.trim() });
+      // O listener de auth já correu antes de o nome existir — atualiza-o aqui
+      set({ user: { id: cred.user.uid, name: name.trim(), email: cred.user.email } });
       // Guarda o perfil no Firestore para outros utilizadores poderem encontrar
       await setDoc(doc(db, 'users', cred.user.uid), {
         name: name.trim(),
@@ -45,6 +62,8 @@ const useAuthStore = create((set) => ({
     } catch (e) {
       if (e.code === 'auth/email-already-in-use') return { error: 'Já existe uma conta com este email.' };
       if (e.code === 'auth/weak-password') return { error: 'A password deve ter pelo menos 6 caracteres.' };
+      if (e.code === 'auth/invalid-email') return { error: 'Insere um email válido.' };
+      if (e.code === 'auth/network-request-failed') return { error: 'Sem ligação à internet.' };
       return { error: 'Erro ao criar conta. Tenta novamente.' };
     }
   },
@@ -57,13 +76,41 @@ const useAuthStore = create((set) => ({
       if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
         return { error: 'Email ou password incorretos.' };
       }
+      if (e.code === 'auth/invalid-email') return { error: 'Insere um email válido.' };
+      if (e.code === 'auth/too-many-requests') return { error: 'Demasiadas tentativas. Espera um pouco e tenta de novo.' };
+      if (e.code === 'auth/network-request-failed') return { error: 'Sem ligação à internet.' };
       return { error: 'Erro ao iniciar sessão. Tenta novamente.' };
     }
   },
 
+  loginWithGoogle: async () => {
+    if (!GoogleSignin) {
+      return { error: 'O login com Google não está disponível no Expo Go. Usa email e password.' };
+    }
+    try {
+      await GoogleSignin.hasPlayServices();
+      const { data } = await GoogleSignin.signIn();
+      const credential = GoogleAuthProvider.credential(data.idToken);
+      const result = await signInWithCredential(auth, credential);
+      const userRef = doc(db, 'users', result.user.uid);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        await setDoc(userRef, {
+          name: result.user.displayName ?? result.user.email,
+          email: result.user.email,
+        });
+      }
+      return { success: true };
+    } catch (e) {
+      console.warn('[Google SignIn]', e?.code, e?.message);
+      if (e?.code === 'SIGN_IN_CANCELLED') return { error: null };
+      return { error: 'Não foi possível entrar com o Google. Tenta novamente.' };
+    }
+  },
+
   logout: async () => {
+    try { await GoogleSignin?.signOut(); } catch {}
     await signOut(auth);
-    // onAuthStateChanged trata de limpar o user no store
   },
 }));
 
