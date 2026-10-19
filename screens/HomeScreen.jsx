@@ -1,167 +1,261 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Alert, Image,
-} from 'react-native';
+import React, { useEffect, useState, useLayoutEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Alert, Switch, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import Botao from '../components/ui/Botao';
-import Cartao from '../components/ui/Cartao';
+import { Avatar, FolhaInferior } from '../components/ui';
 import { useTripStore } from '../store/storeViagens';
+import { useAuthStore } from '../store/storeAuth';
+import { useThemeStore, useTheme } from '../store/storeTheme';
 import { decodeTrip, buildImportedTrip } from '../utils/share';
+import { eCodigoCurto } from '../utils/codigoViagem';
+import { corParticipante } from '../utils/categorias';
+import { datasDaViagem } from '../utils/datas';
+import { eur } from '../utils/valor';
+import { num } from '../utils/theme';
+
+const MAX_AVATARES = 4;
+
+function CartaoViagem({ trip, onPress, c, s }) {
+  const total = trip.expenses.reduce((sum, e) => sum + (e.value || 0), 0);
+  const datas = datasDaViagem(trip.dates);
+  const visiveis = trip.participants.slice(0, MAX_AVATARES);
+  const extra = trip.participants.length - visiveis.length;
+  const n = trip.participants.length;
+  const d = trip.expenses.length;
+
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Abrir viagem ${trip.name}`}
+      style={({ pressed }) => [s.tripCard, c.cardShadow, pressed && { opacity: 0.9 }]}>
+      <LinearGradient colors={c.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.tripHero}>
+        {datas ? (
+          <View style={s.tripDatas}>
+            <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
+            <Text style={s.tripDatasTexto}>{datas}</Text>
+          </View>
+        ) : null}
+        <Text style={s.tripNome} numberOfLines={1}>{trip.name}</Text>
+        {trip.destination ? (
+          <View style={s.tripLocal}>
+            <Ionicons name="location" size={14} color="#E3E8FF" />
+            <Text style={s.tripLocalTexto} numberOfLines={1}>{trip.destination}</Text>
+          </View>
+        ) : null}
+      </LinearGradient>
+      <View style={s.tripBase}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={s.tripLabel}>Total gasto</Text>
+          <Text style={[s.tripTotal, num]}>{eur(total)}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          {n > 0 && (
+            <View style={{ flexDirection: 'row' }}>
+              {visiveis.map((p, i) => (
+                <Avatar key={p.id} nome={p.name} cor={corParticipante(trip, p.id)} tamanho={28}
+                  style={[s.avatarPilha, i === 0 && { marginLeft: 0 }]} />
+              ))}
+              {extra > 0 && (
+                <View style={[s.avatarPilha, s.avatarExtra]}>
+                  <Text style={s.avatarExtraTexto}>+{extra}</Text>
+                </View>
+              )}
+            </View>
+          )}
+          <Text style={s.tripLabel}>
+            {n} {n === 1 ? 'pessoa' : 'pessoas'} · {d} {d === 1 ? 'despesa' : 'despesas'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={c.text3} />
+      </View>
+    </Pressable>
+  );
+}
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const { trips, loadTrips, addTrip } = useTripStore();
-  const [importVisible, setImportVisible] = useState(false);
-  const [importCode, setImportCode] = useState('');
-  const [importing, setImporting] = useState(false);
+  const { trips, loadTrips, addTrip, obterViagemPartilhada } = useTripStore();
+  const user   = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const { isDark, toggle } = useThemeStore();
+  const c = useTheme();
+  const s = useMemo(() => mk(c), [c]);
+
+  const [importVisible,  setImportVisible]  = useState(false);
+  const [importCode,     setImportCode]     = useState('');
+  const [importing,      setImporting]      = useState(false);
+  const [profileVisible, setProfileVisible] = useState(false);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable onPress={() => setProfileVisible(true)} style={s.headerAvatar}
+          accessibilityRole="button" accessibilityLabel="Perfil">
+          <Avatar nome={user?.name} cor={c.userColor} tamanho={36} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, user?.name, s, c.userColor]);
 
   useEffect(() => { loadTrips(); }, []);
 
+  // Aceita o código curto (ex: AALX40) e, por compatibilidade, os códigos longos antigos
   const handleImport = async () => {
-    const raw = decodeTrip(importCode);
-    if (!raw || !raw.name) {
-      Alert.alert('Código inválido', 'O código introduzido não é válido. Verifica se o copiaste corretamente.');
-      return;
-    }
     setImporting(true);
-    const trip = buildImportedTrip(raw);
-    await addTrip(trip);
-    setImporting(false);
-    setImportVisible(false);
-    setImportCode('');
-    Alert.alert('Viagem importada!', `"${trip.name}" foi adicionada às tuas viagens.`);
+    try {
+      const raw = eCodigoCurto(importCode) ? await obterViagemPartilhada(importCode) : decodeTrip(importCode);
+      const trip = raw && buildImportedTrip(raw);
+      if (!trip) {
+        Alert.alert('Código não encontrado', 'Confirma que escreveste bem os 6 caracteres do código.');
+        return;
+      }
+      await addTrip(trip);
+      setImportVisible(false);
+      setImportCode('');
+      Alert.alert('Viagem importada!', `"${trip.name}" foi adicionada.`);
+    } catch (e) {
+      Alert.alert('Não foi possível importar', e?.code === 'permission-denied'
+        ? 'O servidor recusou o acesso às viagens partilhadas.'
+        : 'Verifica a ligação à internet e tenta de novo.');
+    } finally {
+      setImporting(false);
+    }
   };
 
-  const renderTrip = ({ item }) => {
-    const total = item.expenses.reduce((s, e) => s + (e.value || 0), 0);
-    const settledCount = item.expenses.length;
-    return (
-      <TouchableOpacity
-        onPress={() => navigation.navigate('DetalhesViagem', { viagemId: item.id })}
-        accessibilityRole="button"
-        accessibilityLabel={`Abrir viagem ${item.name}`}
-      >
-        <Cartao>
-          <View style={styles.tripHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.tripName}>{item.name}</Text>
-              {item.destination ? <Text style={styles.tripSub}>{item.destination}</Text> : null}
-              {item.dates ? <Text style={styles.tripDates}>{item.dates}</Text> : null}
-            </View>
-            {settledCount > 0 && (
-              <Text style={styles.tripTotal}>€{total.toFixed(2)}</Text>
-            )}
-          </View>
-          <View style={styles.tripStats}>
-            <Text style={styles.tripStat}>{item.participants.length} participante{item.participants.length !== 1 ? 's' : ''}</Text>
-            <Text style={styles.tripStatDot}>·</Text>
-            <Text style={styles.tripStat}>{settledCount} despesa{settledCount !== 1 ? 's' : ''}</Text>
-          </View>
-        </Cartao>
-      </TouchableOpacity>
-    );
-  };
+  const fecharImport = () => { setImportVisible(false); setImportCode(''); };
+
+  const handleLogout = () => Alert.alert('Terminar sessão', 'Tens a certeza?', [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Sair', style: 'destructive', onPress: () => { setProfileVisible(false); logout(); } },
+  ]);
+
+  const vazio = trips.length === 0;
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <FlatList
         data={trips}
-        renderItem={renderTrip}
         keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.list}
+        ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+        renderItem={({ item }) => (
+          <CartaoViagem trip={item} c={c} s={s}
+            onPress={() => navigation.navigate('DetalhesViagem', { viagemId: item.id })} />
+        )}
         ListHeaderComponent={
-          <View>
-            <Image source={require('../assets/logo.png')} style={styles.logo} resizeMode="contain" accessibilityLabel="TripSplit logótipo" />
-            <Text style={styles.subtitle}>Divide despesas de viagem entre amigos</Text>
-            <Botao
-              title="Nova Viagem"
-              onPress={() => navigation.navigate('CriarViagem')}
-            />
-            <Botao
-              title="Importar Viagem"
-              onPress={() => setImportVisible(true)}
-              variant="secondary"
-              accessibilityLabel="Importar viagem partilhada"
-              accessibilityHint="Cola o código partilhado por um amigo para adicionar a viagem"
-            />
-            {trips.length > 0 && <Text style={styles.sectionLabel}>As tuas viagens</Text>}
+          <View style={{ gap: 22, marginBottom: vazio ? 0 : 22 }}>
+            <View style={{ gap: 4 }}>
+              <Text style={s.titulo} accessibilityRole="header">As tuas viagens</Text>
+              <Text style={s.subtitulo}>Divide despesas, guarda memórias</Text>
+            </View>
+            {!vazio && (
+              <View style={s.acoes}>
+                <Botao title="Nova viagem" icon="add" height={50} style={{ flex: 1.2 }}
+                  onPress={() => navigation.navigate('CriarViagem')} />
+                <Botao title="Importar" icon="download-outline" variant="secondary" height={50} style={{ flex: 1 }}
+                  onPress={() => setImportVisible(true)} accessibilityLabel="Importar viagem" />
+              </View>
+            )}
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>Nenhuma viagem ainda</Text>
-            <Text style={styles.emptySub}>Cria uma nova viagem ou importa uma partilhada por um amigo.</Text>
+          <View style={s.empty}>
+            <View style={s.emptyIcone}>
+              <Ionicons name="airplane-outline" size={48} color={c.accent} />
+            </View>
+            <Text style={s.emptyTitulo}>Nenhuma viagem ainda</Text>
+            <Text style={s.emptyTexto}>Cria a primeira viagem ou importa uma que um amigo partilhou contigo.</Text>
+            <View style={s.emptyBotoes}>
+              <Botao title="Nova viagem" icon="add" onPress={() => navigation.navigate('CriarViagem')} />
+              <Botao title="Importar viagem" icon="download-outline" variant="secondary" onPress={() => setImportVisible(true)} />
+            </View>
           </View>
         }
-        contentContainerStyle={styles.list}
       />
 
-      <Modal
-        visible={importVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setImportVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Importar Viagem</Text>
-            <Text style={styles.modalDesc}>
-              Cola abaixo o código que o teu amigo partilhou contigo.
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Cola o código aqui"
-              value={importCode}
-              onChangeText={setImportCode}
-              multiline
-              numberOfLines={4}
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel="Código de importação"
-            />
-            <Botao
-              title="Importar"
-              onPress={handleImport}
-              loading={importing}
-              disabled={!importCode.trim() || importing}
-            />
-            <Botao
-              title="Cancelar"
-              onPress={() => { setImportVisible(false); setImportCode(''); }}
-              variant="secondary"
-            />
+      {/* Folha de perfil */}
+      <FolhaInferior visible={profileVisible} onClose={() => setProfileVisible(false)} style={{ alignItems: 'center', gap: 20 }}>
+        <View style={s.perfil}>
+          <Avatar nome={user?.name} cor={c.userColor} tamanho={80} style={{ marginBottom: 6 }} />
+          <Text style={s.perfilNome}>{user?.name}</Text>
+          <Text style={s.perfilEmail}>{user?.email}</Text>
+        </View>
+        <View style={s.linhaEscuro}>
+          <View style={s.linhaEscuroIcone}>
+            <Ionicons name="moon" size={17} color={c.accent} />
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <Text style={s.linhaEscuroTexto}>Modo escuro AMOLED</Text>
+          <Switch value={isDark} onValueChange={toggle}
+            trackColor={{ false: c.switchOff, true: c.accent }} thumbColor="#FFFFFF" ios_backgroundColor={c.switchOff} />
+        </View>
+        <Botao title="Terminar sessão" icon="log-out-outline" variant="danger" onPress={handleLogout} style={{ alignSelf: 'stretch' }} />
+      </FolhaInferior>
+
+      {/* Folha de importar */}
+      <FolhaInferior visible={importVisible} onClose={fecharImport}>
+        <View style={{ gap: 4 }}>
+          <Text style={s.folhaTitulo}>Importar viagem</Text>
+          <Text style={s.folhaTexto}>Escreve o código de 6 caracteres que o teu amigo partilhou.</Text>
+        </View>
+        <TextInput
+          style={s.importInput} placeholder="Ex: AALX40"
+          placeholderTextColor={c.text3} value={importCode} selectionColor={c.accent}
+          onChangeText={setImportCode} autoCapitalize="characters" autoCorrect={false}
+          returnKeyType="done" onSubmitEditing={() => importCode.trim() && handleImport()}
+          accessibilityLabel="Código da viagem"
+        />
+        <View style={{ gap: 6 }}>
+          <Botao title="Importar" icon="download-outline" onPress={handleImport} loading={importing}
+            disabled={!importCode.trim() || importing} />
+          <Botao title="Cancelar" variant="text" textColor={c.text2} onPress={fecharImport} />
+        </View>
+      </FolhaInferior>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f4ff' },
-  list: { padding: 20, paddingBottom: 40 },
-  logo: { width: 200, height: 130, alignSelf: 'center', marginBottom: 4 },
-  subtitle: { fontSize: 15, textAlign: 'center', color: '#555', marginBottom: 24 },
-  actionsRow: { gap: 10, marginBottom: 8 },
-  actionBtn: { flex: 1 },
-  sectionLabel: { fontSize: 13, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 16, marginBottom: 8 },
-  tripHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
-  tripName: { fontSize: 18, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 2 },
-  tripSub: { fontSize: 14, color: '#555', marginBottom: 1 },
-  tripDates: { fontSize: 13, color: '#888', marginBottom: 2 },
-  tripTotal: { fontSize: 20, fontWeight: 'bold', color: '#007AFF', marginLeft: 8 },
-  tripStats: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  tripStat: { fontSize: 13, color: '#888', fontWeight: '500' },
-  tripStatDot: { fontSize: 13, color: '#ccc' },
-  emptyContainer: { alignItems: 'center', paddingTop: 40 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 8 },
-  emptySub: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalCard: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 8 },
-  modalDesc: { fontSize: 14, color: '#555', marginBottom: 16, lineHeight: 20 },
-  modalInput: { borderWidth: 1.5, borderColor: '#ccc', borderRadius: 10, padding: 12, fontSize: 13, backgroundColor: '#fafafa', color: '#1a1a1a', minHeight: 100, textAlignVertical: 'top', fontFamily: 'monospace', marginBottom: 16 },
+const mk = (c) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 48, flexGrow: 1 },
+  headerAvatar: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+
+  titulo: { fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -0.7, color: c.text },
+  subtitulo: { fontSize: 17, color: c.text2 },
+  acoes: { flexDirection: 'row', gap: 10 },
+
+  tripCard: { backgroundColor: c.card, borderRadius: 24 },
+  tripHero: { height: 96, paddingHorizontal: 18, paddingVertical: 16, justifyContent: 'flex-end', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  tripDatas: { position: 'absolute', top: 14, right: 14, height: 28, paddingHorizontal: 10, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)', flexDirection: 'row', alignItems: 'center', gap: 5 },
+  tripDatasTexto: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  tripNome: { color: '#FFFFFF', fontSize: 24, fontWeight: '700', letterSpacing: -0.2 },
+  tripLocal: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tripLocalTexto: { color: '#E3E8FF', fontSize: 15 },
+  tripBase: { paddingHorizontal: 18, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tripLabel: { fontSize: 13, color: c.text2 },
+  tripTotal: { fontSize: 26, fontWeight: '700', letterSpacing: -0.3, color: c.text },
+  avatarPilha: { marginLeft: -7, borderWidth: 2, borderColor: c.card },
+  avatarExtra: { width: 28, height: 28, borderRadius: 14, backgroundColor: c.field, alignItems: 'center', justifyContent: 'center' },
+  avatarExtraTexto: { fontSize: 11, fontWeight: '700', color: c.text2 },
+
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingBottom: 40 },
+  emptyIcone: { width: 112, height: 112, borderRadius: 56, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  emptyTitulo: { fontSize: 22, fontWeight: '700', color: c.text },
+  emptyTexto: { fontSize: 16, lineHeight: 23, color: c.text2, textAlign: 'center', maxWidth: 290 },
+  emptyBotoes: { alignSelf: 'stretch', gap: 10, marginTop: 16 },
+
+  perfil: { alignItems: 'center', gap: 6, marginTop: 6 },
+  perfilNome: { fontSize: 22, fontWeight: '700', color: c.text },
+  perfilEmail: { fontSize: 15, color: c.text2 },
+  linhaEscuro: { alignSelf: 'stretch', height: 60, borderRadius: 16, backgroundColor: c.field,
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
+  linhaEscuroIcone: { width: 32, height: 32, borderRadius: 9, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  linhaEscuroTexto: { flex: 1, fontSize: 17, fontWeight: '500', color: c.text },
+
+  folhaTitulo: { fontSize: 20, fontWeight: '700', color: c.text },
+  folhaTexto: { fontSize: 15, color: c.text2 },
+  importInput: { height: 64, borderRadius: 14, borderWidth: 1, borderColor: c.fieldBorder, backgroundColor: c.field,
+    paddingHorizontal: 16, fontSize: 26, fontWeight: '700', letterSpacing: 6, textAlign: 'center', color: c.text,
+    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) },
 });

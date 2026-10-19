@@ -1,85 +1,111 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/storeAuth';
+import { useTheme } from '../store/storeTheme';
 import Botao from '../components/ui/Botao';
+import { Campo, CaixaErro } from '../components/ui';
 
 export default function LoginScreen({ onGoSignUp }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const login = useAuthStore((s) => s.login);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const login          = useAuthStore((s) => s.login);
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
+  const c = useTheme();
+  const s = useMemo(() => mk(c), [c]);
+  const insets = useSafeAreaInsets();
+  const passRef = useRef(null);
 
   const handleLogin = async () => {
     setError('');
-    if (!email.trim() || !password) {
-      setError('Preenche o email e a password.');
-      return;
-    }
+    if (!email.trim() || !password) { setError('Preenche o email e a password.'); return; }
     setLoading(true);
-    const result = await login(email, password);
+    const r = await login(email, password);
     setLoading(false);
-    if (result.error) setError(result.error);
+    if (r.error) setError(r.error);
   };
 
+  const handleGoogle = async () => {
+    setError('');
+    setGoogleLoading(true);
+    const r = await loginWithGoogle();
+    setGoogleLoading(false);
+    if (r?.error) setError(r.error);
+  };
+
+  const busy = loading || googleLoading;
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Image source={require('../assets/logo.png')} style={styles.logo} resizeMode="contain" accessibilityLabel="TripSplit logótipo" />
-        <Text style={styles.tagline}>Divide despesas de viagem entre amigos</Text>
-
-        <View style={styles.card}>
-          <Text style={styles.title}>Entrar</Text>
-
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="exemplo@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            returnKeyType="next"
-            maxLength={100}
-            accessibilityLabel="Email"
-          />
-
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="A tua password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            returnKeyType="done"
-            onSubmitEditing={handleLogin}
-            maxLength={50}
-            accessibilityLabel="Password"
-          />
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          <Botao title="Entrar" onPress={handleLogin} loading={loading} disabled={loading} />
-
-          <TouchableOpacity onPress={onGoSignUp} style={styles.linkRow} accessibilityRole="button">
-            <Text style={styles.linkText}>Não tens conta? <Text style={styles.link}>Criar conta</Text></Text>
-          </TouchableOpacity>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView
+        contentContainerStyle={[s.container, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+      >
+        <View style={s.hero}>
+          <LinearGradient colors={c.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.logo, c.btnShadow]}>
+            <Ionicons name="airplane" size={34} color="#FFFFFF" />
+          </LinearGradient>
+          <Text style={s.appName} accessibilityRole="header">TripSplit</Text>
+          <Text style={s.tagline}>Divide despesas, guarda memórias</Text>
         </View>
+
+        <View style={s.form}>
+          <Campo
+            label="Email" icon="mail-outline" placeholder="nome@email.com"
+            value={email} onChangeText={setEmail} keyboardType="email-address"
+            autoCapitalize="none" autoComplete="email" returnKeyType="next" maxLength={100}
+            onSubmitEditing={() => passRef.current?.focus()}
+          />
+          <Campo
+            label="Password" icon="lock-closed-outline" placeholder="A tua password" secure
+            inputRef={passRef} value={password} onChangeText={setPassword}
+            autoComplete="password" returnKeyType="done" onSubmitEditing={handleLogin} maxLength={50}
+          />
+        </View>
+
+        <CaixaErro>{error}</CaixaErro>
+
+        <View style={s.botoes}>
+          <Botao title="Entrar" onPress={handleLogin} loading={loading} disabled={busy} />
+          <View style={s.divider}>
+            <View style={s.dividerLine} />
+            <Text style={s.dividerText}>ou</Text>
+            <View style={s.dividerLine} />
+          </View>
+          <Botao
+            title={googleLoading ? 'A entrar...' : 'Continuar com Google'}
+            icon="logo-google" variant="secondary" onPress={handleGoogle} disabled={busy}
+          />
+        </View>
+
+        <View style={{ flex: 1 }} />
+
+        <Pressable onPress={onGoSignUp} style={s.switchRow} accessibilityRole="button">
+          <Text style={s.switchText}>Ainda não tens conta?</Text>
+          <Text style={s.switchLink}>Criar conta</Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 24, backgroundColor: '#f0f4ff', justifyContent: 'center' },
-  logo: { width: 180, height: 120, alignSelf: 'center', marginBottom: 8 },
-  tagline: { fontSize: 15, textAlign: 'center', color: '#555', marginBottom: 32 },
-  card: { backgroundColor: 'white', borderRadius: 16, padding: 24, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6 },
-  input: { borderWidth: 1.5, borderColor: '#ccc', padding: 14, borderRadius: 10, marginBottom: 16, fontSize: 16, backgroundColor: '#fafafa', color: '#1a1a1a', minHeight: 48 },
-  errorText: { fontSize: 13, color: '#CC0000', marginBottom: 12, textAlign: 'center' },
-  linkRow: { marginTop: 16, alignItems: 'center' },
-  linkText: { fontSize: 15, color: '#555' },
-  link: { color: '#007AFF', fontWeight: '600' },
+const mk = (c) => StyleSheet.create({
+  container: { flexGrow: 1, paddingHorizontal: 20, gap: 28 },
+  hero: { alignItems: 'center', gap: 14 },
+  logo: { width: 72, height: 72, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  appName: { fontSize: 34, fontWeight: '800', letterSpacing: -0.7, color: c.text },
+  tagline: { fontSize: 17, color: c.text2, marginTop: -8 },
+  form: { gap: 16, marginTop: 8 },
+  botoes: { gap: 12 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: c.fieldBorder },
+  dividerText: { fontSize: 13, color: c.text3 },
+  switchRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: 12 },
+  switchText: { fontSize: 15, color: c.text2 },
+  switchLink: { fontSize: 15, color: c.accentText, fontWeight: '600' },
 });

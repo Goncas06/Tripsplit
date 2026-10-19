@@ -1,80 +1,90 @@
-import React, { useState } from 'react';
-import { View, TextInput, StyleSheet, Alert, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import React, { useState, useMemo, useRef } from 'react';
+import { View, StyleSheet, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTripStore } from '../store/storeViagens';
+import { useTheme } from '../store/storeTheme';
 import Botao from '../components/ui/Botao';
+import { Avatar, Campo } from '../components/ui';
+import { corParticipante } from '../utils/categorias';
 
 const uuidv4 = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 export default function AdicionarParticipanteScreen() {
   const { viagemId } = useRoute().params;
-  const navigation = useNavigation();
   const updateTrip = useTripStore((state) => state.updateTrip);
   const trip = useTripStore((state) => state.trips.find(t => t.id === viagemId));
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState('');
+  const inputRef = useRef(null);
+  const c = useTheme();
+  const s = useMemo(() => makeStyles(c), [c]);
 
-  if (!trip) return <Text style={styles.notFound}>Viagem não encontrada</Text>;
+  if (!trip) return <Text style={s.notFound}>Viagem não encontrada</Text>;
 
   const handleChangeName = (text) => {
-    if (/[^a-zA-ZÀ-ÿ\s'-]/.test(text)) {
-      setNameError('Apenas letras são permitidas');
-    } else {
-      setNameError('');
-    }
+    setNameError(/[^a-zA-ZÀ-ÿ\s'-]/.test(text) ? 'Apenas letras são permitidas' : '');
     setName(text.replace(/[^a-zA-ZÀ-ÿ\s'-]/g, ''));
   };
 
+  // Fica no ecrã para se poderem adicionar várias pessoas seguidas
   const handleAdd = () => {
-    if (!name.trim()) {
-      setNameError('Insere o nome do participante');
-      return;
-    }
-    updateTrip(viagemId, {
-      participants: [...trip.participants, { id: uuidv4(), name: name.trim() }],
-    });
-    Alert.alert('Participante adicionado!', `${name.trim()} foi adicionado à viagem.`);
-    navigation.goBack();
+    const nome = name.trim();
+    if (!nome) { setNameError('Insere o nome do participante'); return; }
+    updateTrip(viagemId, { participants: [...trip.participants, { id: uuidv4(), name: nome }] });
+    setName('');
+    setNameError('');
+    inputRef.current?.focus();
   };
 
+  const n = trip.participants.length;
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
-          <Text style={styles.title}>Adicionar participante</Text>
-          <Text style={styles.subtitle}>A viagem: {trip.name}</Text>
-
-          <Text style={styles.label}>Nome *</Text>
-          <TextInput
-            style={[styles.input, nameError ? styles.inputError : null]}
-            placeholder="Nome do participante"
-            value={name}
-            onChangeText={handleChangeName}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={handleAdd}
-            maxLength={50}
-            accessibilityLabel="Nome do participante"
-            accessibilityHint="Apenas letras são permitidas"
-          />
-          {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
-
-          <Botao title="Adicionar" onPress={handleAdd} disabled={!name.trim()} />
-          <Botao title="Cancelar" onPress={() => navigation.goBack()} variant="secondary" />
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+      <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+        <View style={s.topo}>
+          <View style={s.icone}>
+            <Ionicons name="person-add" size={34} color={c.accent} />
+          </View>
+          <Text style={s.titulo} accessibilityRole="header">Quem mais vai?</Text>
         </View>
+
+        <Campo
+          label="Nome" icon="person-outline" placeholder="Nome do participante"
+          inputRef={inputRef} value={name} onChangeText={handleChangeName} erro={nameError}
+          autoFocus returnKeyType="done" blurOnSubmit={false} onSubmitEditing={handleAdd} maxLength={50}
+        />
+
+        <Botao title="Adicionar" icon="add" onPress={handleAdd} disabled={!name.trim()} />
+
+        {n > 0 && (
+          <View style={{ gap: 10, marginTop: 4 }}>
+            <Text style={s.label}>Já na viagem · {n}</Text>
+            <View style={s.chips}>
+              {trip.participants.map(p => (
+                <View key={p.id} style={s.chip}>
+                  <Avatar nome={p.name} cor={corParticipante(trip, p.id)} tamanho={30} />
+                  <Text style={s.chipTexto}>{p.name}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 24, backgroundColor: '#f0f4ff', justifyContent: 'center' },
-  card: { backgroundColor: 'white', borderRadius: 16, padding: 24, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#888', marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6 },
-  input: { borderWidth: 1.5, borderColor: '#ccc', padding: 14, borderRadius: 10, marginBottom: 4, fontSize: 16, backgroundColor: '#fafafa', color: '#1a1a1a', minHeight: 48 },
-  inputError: { borderColor: '#CC0000' },
-  fieldError: { fontSize: 13, color: '#CC0000', marginBottom: 12, marginLeft: 4 },
-  notFound: { flex: 1, textAlign: 'center', marginTop: 40, color: '#555' },
+const makeStyles = (c) => StyleSheet.create({
+  container: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 40, gap: 24 },
+  notFound: { padding: 20, textAlign: 'center', color: c.text2 },
+  topo: { alignItems: 'center', gap: 10 },
+  icone: { width: 80, height: 80, borderRadius: 40, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  titulo: { fontSize: 22, fontWeight: '700', color: c.text },
+  label: { fontSize: 13, fontWeight: '600', color: c.text2 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { height: 40, paddingLeft: 5, paddingRight: 14, borderRadius: 20, backgroundColor: c.card, borderWidth: 1,
+    borderColor: c.fieldBorder, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chipTexto: { fontSize: 15, fontWeight: '600', color: c.text },
 });

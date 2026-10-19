@@ -1,196 +1,177 @@
-import React from 'react';
-import { Text, StyleSheet, ScrollView, View, TouchableOpacity } from 'react-native';
+import React, { useMemo, useLayoutEffect } from 'react';
+import { Text, StyleSheet, ScrollView, View, Pressable, Share } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useTripStore } from '../store/storeViagens';
+import { useTheme } from '../store/storeTheme';
 import { getAllBalances, getSettlements } from '../utils/acertos';
 import Cartao from '../components/ui/Cartao';
-
-const categoryLabels = {
-  gasolina: '⛽ Gasolina', portagens: '🛣️ Portagens',
-  hotel: '🏨 Hotel', refeicoes: '🍽️ Refeições', outros: '📦 Outros',
-};
-
-function PersonReport({ person, trip, settlements }) {
-  const navigation = useNavigation();
-  const allIds = trip.participants.map(p => p.id);
-
-  const expensesShared = trip.expenses.filter(e => {
-    const sw = e.sharedWith?.length > 0 ? e.sharedWith : allIds;
-    return sw.includes(person.id);
-  });
-
-  const deveReceber = settlements
-    .filter(s => s.creditor === person.id)
-    .reduce((sum, s) => sum + s.amount, 0);
-
-  return (
-    <View style={styles.personBlock}>
-      <View style={styles.personHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{person.name.charAt(0).toUpperCase()}</Text>
-        </View>
-        <Text style={styles.personName}>{person.name}</Text>
-        <View style={[styles.netBadge, person.net >= 0 ? styles.netBadgePos : styles.netBadgeNeg]}>
-          <Text style={[styles.netBadgeText, person.net >= 0 ? styles.netTextPos : styles.netTextNeg]}>
-            {person.net > 0.01 ? `recebe €${person.net.toFixed(2)}` :
-              person.net < -0.01 ? `deve €${Math.abs(person.net).toFixed(2)}` : 'equilibrado'}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.personSummaryRow}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Pagou</Text>
-          <Text style={styles.summaryValue}>€{person.paid.toFixed(2)}</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Deve pagar</Text>
-          <Text style={styles.summaryValue}>€{person.owes.toFixed(2)}</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Despesas</Text>
-          <Text style={styles.summaryValue}>{expensesShared.length}</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>A receber</Text>
-          <Text style={[styles.summaryValue, deveReceber > 0.01 ? styles.receberValue : null]}>
-            {deveReceber > 0.01 ? `€${deveReceber.toFixed(2)}` : '—'}
-          </Text>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={styles.reportBtn}
-        onPress={() => navigation.navigate('Relatorio', {
-          viagemId: trip.id,
-          personId: person.id,
-          personName: person.name,
-        })}
-        activeOpacity={0.75}
-      >
-        <Text style={styles.reportBtnText}>Ver relatório →</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
+import { Avatar, BadgeValor, IconeCategoria, TituloSecao } from '../components/ui';
+import { CATEGORIAS, ORDEM_CATEGORIAS, corParticipante } from '../utils/categorias';
+import { datasDaViagem } from '../utils/datas';
+import { eur } from '../utils/valor';
+import { num } from '../utils/theme';
 
 export default function ResumoScreen() {
+  const c = useTheme();
+  const s = useMemo(() => makeStyles(c), [c]);
+  const navigation = useNavigation();
   const { viagemId } = useRoute().params;
   const trip = useTripStore((state) => state.trips.find(t => t.id === viagemId));
 
-  if (!trip) return <Text style={styles.notFound}>Viagem não encontrada</Text>;
+  const dados = useMemo(() => {
+    if (!trip) return null;
+    const total = trip.expenses.reduce((sum, e) => sum + (e.value || 0), 0);
+    const porCat = {};
+    trip.expenses.forEach(e => { const k = CATEGORIAS[e.category] ? e.category : 'outros'; porCat[k] = (porCat[k] || 0) + (e.value || 0); });
+    const categorias = ORDEM_CATEGORIAS.filter(k => porCat[k] > 0)
+      .map(k => ({ key: k, total: porCat[k], pct: total > 0 ? porCat[k] / total : 0 }))
+      .sort((a, b) => b.total - a.total);
+    return { total, categorias, balances: getAllBalances(trip), settlements: getSettlements(trip) };
+  }, [trip]);
 
-  const totalExpenses = trip.expenses.reduce((sum, e) => sum + e.value, 0);
-  const categories = trip.expenses.reduce((acc, exp) => {
-    acc[exp.category] = (acc[exp.category] || 0) + exp.value;
-    return acc;
-  }, {});
-  const balances = getAllBalances(trip);
-  const settlements = getSettlements(trip);
+  const partilharResumo = () => {
+    if (!trip || !dados) return;
+    const nome = (id) => trip.participants.find(p => p.id === id)?.name ?? '?';
+    const linhas = [
+      `Resumo da viagem "${trip.name}"`,
+      `Total gasto: ${eur(dados.total)}`,
+      '',
+      ...dados.balances.map(b => `${b.name}: pagou ${eur(b.paid)}, parte ${eur(b.owes)}`),
+    ];
+    if (dados.settlements.length) {
+      linhas.push('', 'Transferências:', ...dados.settlements.map(x => `• ${nome(x.debtor)} → ${nome(x.creditor)}: ${eur(x.amount)}`));
+    }
+    Share.share({ message: linhas.join('\n'), title: `Resumo: ${trip.name}` });
+  };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable onPress={partilharResumo} style={s.headerBtn} accessibilityRole="button" accessibilityLabel="Partilhar resumo">
+          <Ionicons name="share-outline" size={22} color={c.accent} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, trip, dados, s, c.accent]);
+
+  if (!trip) return <Text style={s.notFound}>Viagem não encontrada</Text>;
+
+  const nPart = trip.participants.length;
+  const media = nPart > 0 ? dados.total / nPart : 0;
+  const sub = [datasDaViagem(trip.dates, { ano: false }), trip.destination].filter(Boolean).join(' · ');
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title} accessibilityRole="header">{trip.name}</Text>
-      <Text style={styles.subtitle}>
-        {trip.destination}{trip.dates ? ` · ${trip.dates}` : ''}
-      </Text>
-
-      <Cartao>
-        <Text style={styles.sectionTitle}>Totais</Text>
-        <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Total gasto</Text>
-          <Text style={styles.statValue}>€{totalExpenses.toFixed(2)}</Text>
+    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={s.content}>
+      {/* Totais */}
+      <View style={s.totais}>
+        <LinearGradient colors={c.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
+          <Text style={s.heroLabel}>Total gasto</Text>
+          <Text style={[s.heroTotal, num]} adjustsFontSizeToFit numberOfLines={1}>{eur(dados.total)}</Text>
+          {sub ? <Text style={s.heroLabel} numberOfLines={1}>{sub}</Text> : null}
+        </LinearGradient>
+        <View style={{ flex: 1, gap: 10 }}>
+          <Cartao style={s.mini}>
+            <Text style={s.miniLabel}>Média/pessoa</Text>
+            <Text style={[s.miniValor, num]} adjustsFontSizeToFit numberOfLines={1}>{eur(media)}</Text>
+          </Cartao>
+          <Cartao style={s.mini}>
+            <Text style={s.miniLabel}>Despesas</Text>
+            <Text style={s.miniValor}>{trip.expenses.length}</Text>
+          </Cartao>
         </View>
-        <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Participantes</Text>
-          <Text style={styles.statValue}>{trip.participants.length}</Text>
-        </View>
-        <View style={styles.statRow}>
-          <Text style={styles.statLabel}>Despesas registadas</Text>
-          <Text style={styles.statValue}>{trip.expenses.length}</Text>
-        </View>
-      </Cartao>
+      </View>
 
-      {balances.length > 0 && trip.expenses.length > 0 && (
-        <Cartao>
-          <Text style={styles.sectionTitle}>Relatório por pessoa</Text>
-          <Text style={styles.sectionHint}>Toca em "Ver relatório" para ver o detalhe de cada pessoa</Text>
-          {balances.map(b => (
-            <PersonReport key={b.id} person={b} trip={trip} settlements={settlements} />
-          ))}
-        </Cartao>
-      )}
-
-      {Object.keys(categories).length > 0 && (
-        <Cartao>
-          <Text style={styles.sectionTitle}>Por categoria</Text>
-          {Object.entries(categories)
-            .sort(([, a], [, b]) => b - a)
-            .map(([cat, val]) => (
-              <View key={cat} style={styles.catRow}>
-                <Text style={styles.catLabel}>{categoryLabels[cat] ?? cat}</Text>
-                <View style={styles.catRight}>
-                  <Text style={styles.catValue}>€{val.toFixed(2)}</Text>
-                  {totalExpenses > 0 && (
-                    <Text style={styles.catPercent}>{Math.round(val / totalExpenses * 100)}%</Text>
-                  )}
-                </View>
+      {/* Por categoria */}
+      {dados.categorias.length > 0 && (
+        <View style={s.secao}>
+          <TituloSecao>Gasto por categoria</TituloSecao>
+          <Cartao padded style={{ gap: 14 }}>
+            <View style={s.barra}>
+              {dados.categorias.map(k => (
+                <View key={k.key} style={{ flex: k.pct, backgroundColor: CATEGORIAS[k.key].color }} />
+              ))}
+            </View>
+            {dados.categorias.map(k => (
+              <View key={k.key} style={s.catLinha}>
+                <IconeCategoria cat={k.key} tamanho={36} raio={11} />
+                <Text style={s.catNome}>{CATEGORIAS[k.key].label}</Text>
+                <Text style={[s.catPct, num]}>{Math.round(k.pct * 100)}%</Text>
+                <Text style={[s.catTotal, num]}>{eur(k.total)}</Text>
               </View>
             ))}
-        </Cartao>
+          </Cartao>
+        </View>
       )}
 
-      {trip.expenses.length === 0 && (
-        <Cartao>
-          <Text style={styles.empty}>Ainda não há despesas registadas nesta viagem.</Text>
-        </Cartao>
+      {/* Por pessoa */}
+      {dados.balances.length > 0 && (
+        <View style={s.secao}>
+          <TituloSecao>Por pessoa</TituloSecao>
+          {dados.balances.map(p => {
+            const pos = p.net > 0.005;
+            const neg = p.net < -0.005;
+            return (
+              <Cartao key={p.id} clip>
+                <View style={s.pessoaTopo}>
+                  <Avatar nome={p.name} cor={corParticipante(trip, p.id)} tamanho={40} />
+                  <Text style={s.pessoaNome} numberOfLines={1}>{p.name}</Text>
+                  <BadgeValor valor={p.net} texto={pos ? `A receber ${eur(p.net)}` : neg ? `A pagar ${eur(p.net)}` : 'Equilibrado'} />
+                </View>
+                <View style={s.grelha}>
+                  <View style={s.celula}>
+                    <Text style={s.celulaLabel}>Pagou</Text>
+                    <Text style={[s.celulaValor, num]}>{eur(p.paid)}</Text>
+                  </View>
+                  <View style={s.celula}>
+                    <Text style={s.celulaLabel}>Deve pagar (parte)</Text>
+                    <Text style={[s.celulaValor, num]}>{eur(p.owes)}</Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={s.relatorio}
+                  onPress={() => navigation.navigate('Relatorio', { viagemId: trip.id, personId: p.id, personName: p.name })}
+                  accessibilityRole="button" accessibilityLabel={`Ver relatório de ${p.name}`}
+                >
+                  <Text style={s.relatorioTexto}>Ver relatório</Text>
+                  <Ionicons name="arrow-forward" size={16} color={c.accentText} />
+                </Pressable>
+              </Cartao>
+            );
+          })}
+        </View>
       )}
-
-      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f8f9fa' },
-  notFound: { padding: 20, textAlign: 'center' },
-  title: { fontSize: 26, fontWeight: 'bold', textAlign: 'center', color: '#1a1a1a', marginBottom: 4 },
-  subtitle: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 20 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#333', marginBottom: 4 },
-  sectionHint: { fontSize: 12, color: '#aaa', marginBottom: 12 },
-  statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  statLabel: { fontSize: 16, color: '#555' },
-  statValue: { fontSize: 18, fontWeight: 'bold', color: '#007AFF' },
+const makeStyles = (c) => StyleSheet.create({
+  content: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 56, gap: 26 },
+  notFound: { padding: 20, textAlign: 'center', color: c.text2 },
+  headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  secao: { gap: 12 },
 
-  personBlock: { borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingVertical: 14 },
-  personHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginRight: 8 },
-  avatarText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
-  personName: { flex: 1, fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  netBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  netBadgePos: { backgroundColor: '#e8f5e9' },
-  netBadgeNeg: { backgroundColor: '#ffebee' },
-  netBadgeText: { fontSize: 12, fontWeight: '700' },
-  netTextPos: { color: '#2e7d32' },
-  netTextNeg: { color: '#c62828' },
+  totais: { flexDirection: 'row', gap: 10 },
+  hero: { flex: 1.4, borderRadius: 20, padding: 16, gap: 2, justifyContent: 'center' },
+  heroLabel: { fontSize: 13, color: c.heroText },
+  heroTotal: { fontSize: 30, fontWeight: '700', letterSpacing: -0.6, color: '#FFFFFF' },
+  mini: { flex: 1, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14, justifyContent: 'center' },
+  miniLabel: { fontSize: 12, color: c.text2 },
+  miniValor: { fontSize: 18, fontWeight: '700', color: c.text },
 
-  personSummaryRow: { flexDirection: 'row', backgroundColor: '#f8f9fa', borderRadius: 8, padding: 10, marginBottom: 10 },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: 10, color: '#888', marginBottom: 2, textAlign: 'center' },
-  summaryValue: { fontSize: 13, fontWeight: '700', color: '#333' },
-  receberValue: { color: '#2e7d32' },
-  summaryDivider: { width: 1, backgroundColor: '#e0e0e0', marginVertical: 2 },
+  barra: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', gap: 2 },
+  catLinha: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  catNome: { flex: 1, fontSize: 16, fontWeight: '500', color: c.text },
+  catPct: { fontSize: 13, color: c.text3, width: 40, textAlign: 'right' },
+  catTotal: { fontSize: 16, fontWeight: '700', color: c.text, minWidth: 76, textAlign: 'right' },
 
-  reportBtn: { alignSelf: 'flex-end', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1.5, borderColor: '#007AFF' },
-  reportBtnText: { fontSize: 13, color: '#007AFF', fontWeight: '600' },
-
-  catRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  catLabel: { fontSize: 16, color: '#444' },
-  catRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  catValue: { fontSize: 16, fontWeight: '600', color: '#333' },
-  catPercent: { fontSize: 13, color: '#888', width: 36, textAlign: 'right' },
-  empty: { textAlign: 'center', color: '#666', fontSize: 15, lineHeight: 22 },
+  pessoaTopo: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 14, paddingBottom: 10, paddingHorizontal: 16 },
+  pessoaNome: { flex: 1, fontSize: 17, fontWeight: '700', color: c.text },
+  grelha: { flexDirection: 'row', gap: 1, marginHorizontal: 16, backgroundColor: c.sep, borderRadius: 12, overflow: 'hidden' },
+  celula: { flex: 1, backgroundColor: c.field, paddingVertical: 10, paddingHorizontal: 12 },
+  celulaLabel: { fontSize: 12, color: c.text2 },
+  celulaValor: { fontSize: 16, fontWeight: '600', color: c.text },
+  relatorio: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, paddingHorizontal: 16 },
+  relatorioTexto: { fontSize: 15, fontWeight: '600', color: c.accentText },
 });
