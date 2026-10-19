@@ -1,4 +1,34 @@
 {
-  "name": "tripsplit",
-  "displayName": "TripSplit"
+  "expo": {
+    "name": "TripSplit",
+    "slug": "tripsplit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.tripsplit"
+    },
+    "android": {
+      "package": "com.anonymous.tripsplit",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "A TripSplit precisa de aceder à galeria para escolher fotos dos recibos.",
+          "cameraPermission": "A TripSplit precisa de aceder à câmara para tirar fotos dos recibos."
+        }
+      ],
+      "expo-status-bar"
+    ]
+  }
 }

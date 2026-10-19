@@ -1,8 +1,4 @@
-const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
+const { getDefaultConfig } = require('expo/metro-config');
 
-module.exports = mergeConfig(getDefaultConfig(__dirname), {
-  resolver: {
-    // Necessário para o Firebase JS SDK (usa "exports" no package.json)
-    unstable_enablePackageExports: true,
-  },
-});
+// O Expo já resolve o campo "exports" do package.json (necessário para o Firebase JS SDK)
+module.exports = getDefaultConfig(__dirname);
