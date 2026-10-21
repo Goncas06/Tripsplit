@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import {
-  collection, doc, getDocs, getDoc, setDoc, deleteDoc,
+  collection, doc, getDocs, getDoc, setDoc, deleteDoc, Timestamp,
 } from 'firebase/firestore';
 import { Alert } from 'react-native';
 import { auth, db } from '../utils/firebase';
@@ -14,7 +14,26 @@ const tripsCol = (uid) => collection(db, 'users', uid, 'trips');
 const tripDoc = (uid, tripId) => doc(db, 'users', uid, 'trips', tripId);
 // Cópia pública (para quem tem o código) de uma viagem partilhada
 const sharedDoc = (code) => doc(db, 'sharedTrips', code);
-const dadosPartilha = (uid, trip) => sanitize({ ownerId: uid, trip: slimTrip(trip), updatedAt: Date.now() });
+// Um código de partilha é válido durante 30 dias; partilhar de novo renova o prazo
+export const VALIDADE_PARTILHA_MS = 30 * 24 * 60 * 60 * 1000;
+const dadosPartilha = (uid, trip, expiraEm) => ({
+  ownerId: uid,
+  trip: sanitize(slimTrip(trip)),
+  updatedAt: Date.now(),
+  expiresAt: Timestamp.fromMillis(expiraEm), // Timestamp: as regras comparam com request.time
+});
+const partilhaAtiva = (trip) => !!trip?.shareCode && (trip.shareExpiresAt ?? 0) > Date.now();
+
+// Um código está livre se não existir. Um código expirado de outra pessoa é recusado
+// pelas regras (permission-denied) — também conta como ocupado.
+async function codigoLivre(code) {
+  try {
+    return !(await getDoc(sharedDoc(code))).exists();
+  } catch (e) {
+    if (e?.code === 'permission-denied') return false;
+    throw e;
+  }
+}
 
 // Firestore não aceita campos undefined — remove-os antes de guardar
 const sanitize = (obj) => JSON.parse(JSON.stringify(obj));
@@ -84,8 +103,8 @@ const useTripStore = create((set, get) => ({
     // setDoc em vez de updateDoc para garantir que o documento existe
     persist(setDoc(tripDoc(uid, id), sanitize(updatedTrip)), 'updateTrip');
     // Mantém a cópia partilhada em dia, para quem importar depois receber a versão atual
-    if (updatedTrip.shareCode) {
-      persist(setDoc(sharedDoc(updatedTrip.shareCode), dadosPartilha(uid, updatedTrip)), 'updateShare');
+    if (partilhaAtiva(updatedTrip)) {
+      persist(setDoc(sharedDoc(updatedTrip.shareCode), dadosPartilha(uid, updatedTrip, updatedTrip.shareExpiresAt)), 'updateShare');
     }
   },
 
@@ -98,8 +117,9 @@ const useTripStore = create((set, get) => ({
     if (trip?.shareCode) persist(deleteDoc(sharedDoc(trip.shareCode)), 'deleteShare');
   },
 
-  // Devolve o código curto da viagem, criando-o na primeira partilha. Precisa de internet.
-  // Lança o erro do Firestore (ex: permission-denied) para o ecrã explicar o problema.
+  // Devolve { code, expiraEm }: cria o código na primeira partilha e renova a validade
+  // (30 dias) a cada partilha. Precisa de internet. Lança o erro do Firestore
+  // (ex: permission-denied) para o ecrã explicar o problema.
   partilharViagem: async (id) => {
     const uid = getUid();
     const trip = get().trips.find(t => t.id === id);
@@ -108,19 +128,36 @@ const useTripStore = create((set, get) => ({
     if (!code) {
       for (let i = 0; i < 5 && !code; i++) {
         const candidato = gerarCodigo();
-        if (!(await getDoc(sharedDoc(candidato))).exists()) code = candidato;
+        if (await codigoLivre(candidato)) code = candidato;
       }
       if (!code) throw new Error('sem-codigo');
     }
-    await setDoc(sharedDoc(code), dadosPartilha(uid, trip));
-    if (!trip.shareCode) get().updateTrip(id, { shareCode: code });
-    return code;
+    const expiraEm = Date.now() + VALIDADE_PARTILHA_MS;
+    await setDoc(sharedDoc(code), dadosPartilha(uid, trip, expiraEm));
+    get().updateTrip(id, { shareCode: code, shareExpiresAt: expiraEm });
+    return { code, expiraEm };
   },
 
-  // Vai buscar os dados de uma viagem partilhada pelo código; null se não existir
+  // Apaga a cópia partilhada: o código deixa de funcionar de imediato
+  pararPartilha: (id) => {
+    const trip = get().trips.find(t => t.id === id);
+    if (!trip?.shareCode) return;
+    persist(deleteDoc(sharedDoc(trip.shareCode)), 'stopShare');
+    get().updateTrip(id, { shareCode: undefined, shareExpiresAt: undefined });
+  },
+
+  // Dados de uma viagem partilhada pelo código; null se não existir ou já tiver expirado
   obterViagemPartilhada: async (codigo) => {
-    const snap = await getDoc(sharedDoc(normalizarCodigo(codigo)));
-    return snap.exists() ? snap.data().trip : null;
+    try {
+      const snap = await getDoc(sharedDoc(normalizarCodigo(codigo)));
+      if (!snap.exists()) return null;
+      const d = snap.data();
+      if (d.expiresAt?.toMillis && d.expiresAt.toMillis() < Date.now()) return null;
+      return d.trip;
+    } catch (e) {
+      if (e?.code === 'permission-denied') return null; // expirado (recusado pelas regras)
+      throw e;
+    }
   },
 }));
 

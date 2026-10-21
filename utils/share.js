@@ -2,7 +2,7 @@ const uuidv4 = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 // Dados que vão para quem importa: sem fotos de recibos nem o código de partilha
 export const slimTrip = (trip) => {
-  const { shareCode: _c, ...resto } = trip;
+  const { shareCode: _c, shareExpiresAt: _e, ...resto } = trip;
   return { ...resto, expenses: (trip.expenses || []).map(({ receiptUrl: _r, ...e }) => e) };
 };
 

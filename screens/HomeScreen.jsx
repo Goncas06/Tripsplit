@@ -106,7 +106,7 @@ export default function HomeScreen() {
       const raw = eCodigoCurto(importCode) ? await obterViagemPartilhada(importCode) : decodeTrip(importCode);
       const trip = raw && buildImportedTrip(raw);
       if (!trip) {
-        Alert.alert('Código não encontrado', 'Confirma que escreveste bem os 6 caracteres do código.');
+        Alert.alert('Código não encontrado', 'Confirma que escreveste bem os 6 caracteres. Os códigos expiram ao fim de 30 dias — pede um novo ao teu amigo.');
         return;
       }
       await addTrip(trip);

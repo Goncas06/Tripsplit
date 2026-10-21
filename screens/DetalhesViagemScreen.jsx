@@ -12,7 +12,7 @@ import Cartao from '../components/ui/Cartao';
 import { Avatar, BadgeValor, IconeCategoria, TituloSecao, Separador, LinhaAcao } from '../components/ui';
 import { getPersonalBalance, getSettlements } from '../utils/acertos';
 import { categoria, corParticipante } from '../utils/categorias';
-import { datasDaViagem } from '../utils/datas';
+import { datasDaViagem, formatIntervalo } from '../utils/datas';
 import { eur } from '../utils/valor';
 import { num } from '../utils/theme';
 
@@ -93,6 +93,7 @@ export default function DetalhesViagemScreen() {
   const updateTrip = useTripStore((state) => state.updateTrip);
   const deleteTrip = useTripStore((state) => state.deleteTrip);
   const partilharViagem = useTripStore((state) => state.partilharViagem);
+  const pararPartilha = useTripStore((state) => state.pararPartilha);
   const [aPartilhar, setAPartilhar] = useState(false);
 
   const allIds = useMemo(() => trip?.participants.map(p => p.id) ?? [], [trip?.participants]);
@@ -103,9 +104,9 @@ export default function DetalhesViagemScreen() {
   const handleShare = async () => {
     if (aPartilhar) return;
     setAPartilhar(true);
-    let code;
+    let code, expiraEm;
     try {
-      code = await partilharViagem(trip.id);
+      ({ code, expiraEm } = await partilharViagem(trip.id));
     } catch (e) {
       Alert.alert('Não foi possível partilhar', e?.code === 'permission-denied'
         ? 'O servidor recusou criar o código de partilha. As regras do Firestore têm de permitir a coleção "sharedTrips".'
@@ -115,7 +116,7 @@ export default function DetalhesViagemScreen() {
       setAPartilhar(false);
     }
     await Share.share({
-      message: `Junta-te à minha viagem "${trip.name}" no TripSplit!\n\nAbre o TripSplit → "Importar viagem" e escreve o código: ${code}`,
+      message: `Junta-te à minha viagem "${trip.name}" no TripSplit!\n\nAbre o TripSplit → "Importar viagem" e escreve o código: ${code}\n\n(válido até ${formatIntervalo(new Date(expiraEm))})`,
       title: `Viagem: ${trip.name}`,
     });
   };
@@ -175,6 +176,15 @@ export default function DetalhesViagemScreen() {
 
   const nomeDe = (id) => trip.participants.find(p => p.id === id)?.name ?? '?';
   const datas = datasDaViagem(trip.dates);
+  const partilhaAtiva = !!trip.shareCode && (trip.shareExpiresAt ?? 0) > Date.now();
+  const validade = trip.shareExpiresAt ? formatIntervalo(new Date(trip.shareExpiresAt)) : '';
+
+  const handlePararPartilha = () => {
+    Alert.alert('Deixar de partilhar', `O código ${trip.shareCode} deixa de funcionar e ninguém mais consegue importar esta viagem com ele.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Deixar de partilhar', style: 'destructive', onPress: () => pararPartilha(trip.id) },
+    ]);
+  };
   const nPart = trip.participants.length;
   const media = nPart > 0 ? totalExpenses / nPart : 0;
 
@@ -199,9 +209,17 @@ export default function DetalhesViagemScreen() {
                 </View>
               ) : null}
               {trip.shareCode ? (
-                <View style={s.metaItem} accessibilityLabel={`Código da viagem ${trip.shareCode.split('').join(' ')}`}>
+                <View style={s.metaItem} accessibilityLabel={partilhaAtiva
+                  ? `Código da viagem ${trip.shareCode.split('').join(' ')}, válido até ${validade}`
+                  : 'Código de partilha expirado'}>
                   <Ionicons name="key-outline" size={15} color={c.text2} />
-                  <Text style={[s.metaTexto, s.codigo]} selectable>{trip.shareCode}</Text>
+                  {partilhaAtiva ? (
+                    <Text style={s.metaTexto}>
+                      <Text style={s.codigo} selectable>{trip.shareCode}</Text> · até {validade}
+                    </Text>
+                  ) : (
+                    <Text style={s.metaTexto}>código expirado</Text>
+                  )}
                 </View>
               ) : null}
             </View>
@@ -333,7 +351,11 @@ export default function DetalhesViagemScreen() {
         <Cartao clip>
           <LinhaAcao icon="swap-horizontal" titulo="Ver acertos detalhados" onPress={() => handleNav('Saldos')} />
           <LinhaAcao icon="pie-chart-outline" titulo="Resumo final" onPress={() => handleNav('Resumo')} />
-          <LinhaAcao icon="share-social-outline" titulo="Partilhar viagem" onPress={handleShare} ultima />
+          <LinhaAcao icon="share-social-outline" titulo={partilhaAtiva ? 'Partilhar de novo (renova o código)' : 'Partilhar viagem'}
+            onPress={handleShare} ultima={!trip.shareCode} />
+          {trip.shareCode ? (
+            <LinhaAcao icon="close-circle-outline" titulo="Deixar de partilhar" onPress={handlePararPartilha} ultima />
+          ) : null}
         </Cartao>
         <Botao title="Eliminar viagem" icon="trash-outline" variant="text" textColor={c.negText}
           onPress={handleDelete} style={{ marginTop: -12 }} />
