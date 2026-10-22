@@ -10,7 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from './store/storeAuth';
 import { useThemeStore, useTheme } from './store/storeTheme';
 
-import SplashScreen from './screens/SplashScreen';
+import * as SplashScreen from 'expo-splash-screen';
 import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -23,6 +23,10 @@ import ResumoScreen from './screens/ResumoScreen';
 import RelatorioScreen from './screens/RelatorioScreen';
 
 const Stack = createNativeStackNavigator();
+
+// Mantém o ecrã de arranque nativo até a app estar pronta; ao sair, fade de 250 ms
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({ duration: 250, fade: true });
 
 function NetworkBanner() {
   const [isConnected, setIsConnected] = useState(true);
@@ -91,12 +95,19 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // O ecrã de arranque nativo fica visível até a sessão e o tema estarem prontos,
+  // e sai com um fade curto — sem ecrãs intermédios nem "flash" de cores
+  const pronto = !loading && themeLoaded;
+  useEffect(() => {
+    if (pronto) SplashScreen.hideAsync().catch(() => {});
+  }, [pronto]);
+
   const navTheme = isDark
     ? { ...DarkTheme, colors: { ...DarkTheme.colors, primary: c.accent, background: c.bg, card: c.bg, text: c.text, border: c.sep } }
     : { ...DefaultTheme, colors: { ...DefaultTheme.colors, primary: c.accent, background: c.bg, card: c.bg, text: c.text, border: c.sep } };
 
-  // Aguarda tanto o auth como o tema antes de mostrar a app
-  if (loading || !themeLoaded) return <SplashScreen />;
+  // Enquanto não está pronto, o ecrã de arranque nativo continua por cima
+  if (!pronto) return null;
 
   return (
     <SafeAreaProvider>

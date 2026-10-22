@@ -14,7 +14,7 @@
       "package": "com.anonymous.tripsplit",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#5271FF"
       }
     },
     "web": {
@@ -28,7 +28,21 @@
           "cameraPermission": "A TripSplit precisa de aceder à câmara para tirar fotos dos recibos."
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 88,
+          "resizeMode": "contain",
+          "backgroundColor": "#F0F4FF",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-font"
     ]
   }
 }
