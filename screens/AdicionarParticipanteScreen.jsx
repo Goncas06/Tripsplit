@@ -12,7 +12,7 @@ const uuidv4 = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 export default function AdicionarParticipanteScreen() {
   const { viagemId } = useRoute().params;
-  const updateTrip = useTripStore((state) => state.updateTrip);
+  const addParticipant = useTripStore((state) => state.addParticipant);
   const trip = useTripStore((state) => state.trips.find(t => t.id === viagemId));
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState('');
@@ -31,7 +31,7 @@ export default function AdicionarParticipanteScreen() {
   const handleAdd = () => {
     const nome = name.trim();
     if (!nome) { setNameError('Insere o nome do participante'); return; }
-    updateTrip(viagemId, { participants: [...trip.participants, { id: uuidv4(), name: nome }] });
+    addParticipant(viagemId, { id: uuidv4(), name: nome });
     setName('');
     setNameError('');
     inputRef.current?.focus();

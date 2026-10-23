@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useLayoutEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Alert, Switch, Platform } from 'react-native';
+import React, { useState, useLayoutEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Alert, Switch, Platform, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,14 @@ import { eur } from '../utils/valor';
 import { num } from '../utils/theme';
 
 const MAX_AVATARES = 4;
+
+// Resolve true quando a viagem aparece no store (até 8 s)
+const esperarViagem = (id) => new Promise((resolve) => {
+  const tem = (st) => st.trips.some(t => t.id === id);
+  if (tem(useTripStore.getState())) { resolve(true); return; }
+  const parar = useTripStore.subscribe((st) => { if (tem(st)) { parar(); clearTimeout(t); resolve(true); } });
+  const t = setTimeout(() => { parar(); resolve(false); }, 8000);
+});
 
 function CartaoViagem({ trip, onPress, c, s }) {
   const total = trip.expenses.reduce((sum, e) => sum + (e.value || 0), 0);
@@ -74,7 +82,7 @@ function CartaoViagem({ trip, onPress, c, s }) {
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const { trips, loadTrips, addTrip, obterViagemPartilhada } = useTripStore();
+  const { trips, carregado, addTrip, juntarComCodigo } = useTripStore();
   const user   = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { isDark, toggle } = useThemeStore();
@@ -97,25 +105,41 @@ export default function HomeScreen() {
     });
   }, [navigation, user?.name, s, c.userColor]);
 
-  useEffect(() => { loadTrips(); }, []);
+  const codigoInvalido = () => Alert.alert('Código não encontrado',
+    'Confirma que escreveste bem os 6 caracteres. Os códigos expiram ao fim de 30 dias — pede um novo a quem partilhou.');
 
-  // Aceita o código curto (ex: AALX40) e, por compatibilidade, os códigos longos antigos
+  // Com um código curto (ex: AALX40) a pessoa junta-se à viagem e passa a vê-la em tempo real.
+  // Códigos antigos (longos, ou de antes das viagens partilhadas) continuam a criar uma cópia.
   const handleImport = async () => {
     setImporting(true);
     try {
-      const raw = eCodigoCurto(importCode) ? await obterViagemPartilhada(importCode) : decodeTrip(importCode);
-      const trip = raw && buildImportedTrip(raw);
-      if (!trip) {
-        Alert.alert('Código não encontrado', 'Confirma que escreveste bem os 6 caracteres. Os códigos expiram ao fim de 30 dias — pede um novo ao teu amigo.');
+      if (eCodigoCurto(importCode)) {
+        const r = await juntarComCodigo(importCode);
+        if (r.estado === 'invalido') { codigoInvalido(); return; }
+        if (r.estado === 'copia') {
+          const copia = buildImportedTrip(r.trip);
+          if (!copia) { codigoInvalido(); return; }
+          addTrip(copia);
+          fecharImport();
+          Alert.alert('Viagem importada', `"${copia.name}" foi adicionada como cópia (código antigo).`);
+          return;
+        }
+        // Espera que a viagem chegue pela subscrição em tempo real antes de a abrir
+        const chegou = await esperarViagem(r.tripId);
+        fecharImport();
+        if (r.estado === 'ja-membro') Alert.alert('Já fazes parte desta viagem');
+        if (chegou) navigation.navigate('DetalhesViagem', { viagemId: r.tripId });
+        else Alert.alert('Entraste na viagem', 'Vai aparecer na lista assim que houver ligação.');
         return;
       }
-      await addTrip(trip);
-      setImportVisible(false);
-      setImportCode('');
-      Alert.alert('Viagem importada!', `"${trip.name}" foi adicionada.`);
+      const copia = (() => { const raw = decodeTrip(importCode); return raw && buildImportedTrip(raw); })();
+      if (!copia) { codigoInvalido(); return; }
+      addTrip(copia);
+      fecharImport();
+      Alert.alert('Viagem importada', `"${copia.name}" foi adicionada.`);
     } catch (e) {
-      Alert.alert('Não foi possível importar', e?.code === 'permission-denied'
-        ? 'O servidor recusou o acesso às viagens partilhadas.'
+      Alert.alert('Não foi possível entrar na viagem', e?.code === 'permission-denied'
+        ? 'O servidor recusou o acesso. O código pode ter expirado entretanto.'
         : 'Verifica a ligação à internet e tenta de novo.');
     } finally {
       setImporting(false);
@@ -153,25 +177,27 @@ export default function HomeScreen() {
               <View style={s.acoes}>
                 <Botao title="Nova viagem" icon="add" height={50} style={{ flex: 1.2 }}
                   onPress={() => navigation.navigate('CriarViagem')} />
-                <Botao title="Importar" icon="download-outline" variant="secondary" height={50} style={{ flex: 1 }}
-                  onPress={() => setImportVisible(true)} accessibilityLabel="Importar viagem" />
+                <Botao title="Usar código" icon="key-outline" variant="secondary" height={50} style={{ flex: 1 }}
+                  onPress={() => setImportVisible(true)} accessibilityLabel="Entrar numa viagem com código" />
               </View>
             )}
           </View>
         }
-        ListEmptyComponent={
+        ListEmptyComponent={!carregado ? (
+          <View style={s.empty}><ActivityIndicator color={c.accent} /></View>
+        ) : (
           <View style={s.empty}>
             <View style={s.emptyIcone}>
               <Ionicons name="airplane-outline" size={48} color={c.accent} />
             </View>
             <Text style={s.emptyTitulo}>Nenhuma viagem ainda</Text>
-            <Text style={s.emptyTexto}>Cria a primeira viagem ou importa uma que um amigo partilhou contigo.</Text>
+            <Text style={s.emptyTexto}>Cria a primeira viagem ou entra numa que um amigo partilhou contigo.</Text>
             <View style={s.emptyBotoes}>
               <Botao title="Nova viagem" icon="add" onPress={() => navigation.navigate('CriarViagem')} />
-              <Botao title="Importar viagem" icon="download-outline" variant="secondary" onPress={() => setImportVisible(true)} />
+              <Botao title="Usar código de viagem" icon="key-outline" variant="secondary" onPress={() => setImportVisible(true)} />
             </View>
           </View>
-        }
+        )}
       />
 
       {/* Folha de perfil */}
@@ -195,8 +221,8 @@ export default function HomeScreen() {
       {/* Folha de importar */}
       <FolhaInferior visible={importVisible} onClose={fecharImport}>
         <View style={{ gap: 4 }}>
-          <Text style={s.folhaTitulo}>Importar viagem</Text>
-          <Text style={s.folhaTexto}>Escreve o código de 6 caracteres que o teu amigo partilhou.</Text>
+          <Text style={s.folhaTitulo}>Entrar numa viagem</Text>
+          <Text style={s.folhaTexto}>Escreve o código de 6 caracteres que o teu amigo partilhou. Passas a ver e a editar a viagem com ele, em tempo real.</Text>
         </View>
         <TextInput
           style={s.importInput} placeholder="Ex: AALX40"
@@ -206,7 +232,7 @@ export default function HomeScreen() {
           accessibilityLabel="Código da viagem"
         />
         <View style={{ gap: 6 }}>
-          <Botao title="Importar" icon="download-outline" onPress={handleImport} loading={importing}
+          <Botao title="Entrar na viagem" icon="enter-outline" onPress={handleImport} loading={importing}
             disabled={!importCode.trim() || importing} />
           <Botao title="Cancelar" variant="text" textColor={c.text2} onPress={fecharImport} />
         </View>

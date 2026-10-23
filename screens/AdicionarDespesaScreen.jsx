@@ -71,7 +71,9 @@ export default function AdicionarDespesaScreen() {
   const { viagemId, expenseId } = route.params ?? {};
 
   const trip = useTripStore((state) => state.trips.find(t => t.id === viagemId));
-  const updateTrip = useTripStore((state) => state.updateTrip);
+  const addExpense = useTripStore((state) => state.addExpense);
+  const updateExpense = useTripStore((state) => state.updateExpense);
+  const removeExpense = useTripStore((state) => state.removeExpense);
 
   const isEditing = !!expenseId;
   const existing = isEditing ? trip?.expenses.find(e => e.id === expenseId) : null;
@@ -239,11 +241,8 @@ export default function AdicionarDespesaScreen() {
       ...(finalReceiptUrl ? { receiptUrl: finalReceiptUrl } : {}),
     };
 
-    const newExpenses = isEditing
-      ? trip.expenses.map(e => e.id === expenseId ? updatedExpense : e)
-      : [...trip.expenses, updatedExpense];
-
-    updateTrip(viagemId, { expenses: newExpenses });
+    if (isEditing) updateExpense(viagemId, updatedExpense);
+    else addExpense(viagemId, updatedExpense);
     permitirSaida();
     navigation.goBack();
   };
@@ -252,7 +251,7 @@ export default function AdicionarDespesaScreen() {
     Alert.alert('Eliminar despesa', 'Tens a certeza que queres eliminar esta despesa?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Eliminar', style: 'destructive', onPress: () => {
-        updateTrip(viagemId, { expenses: trip.expenses.filter(e => e.id !== expenseId) });
+        removeExpense(viagemId, expenseId);
         permitirSaida();
         navigation.goBack();
       } },

@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTripStore } from '../store/storeViagens';
+import { useAuthStore } from '../store/storeAuth';
 import { useTheme } from '../store/storeTheme';
 import Botao from '../components/ui/Botao';
 import Cartao from '../components/ui/Cartao';
@@ -90,8 +91,11 @@ export default function DetalhesViagemScreen() {
   const { viagemId } = useRoute().params;
   const navigation = useNavigation();
   const trip = useTripStore((state) => state.trips.find(t => t.id === viagemId));
-  const updateTrip = useTripStore((state) => state.updateTrip);
+  const removeParticipant = useTripStore((state) => state.removeParticipant);
+  const removeExpense = useTripStore((state) => state.removeExpense);
   const deleteTrip = useTripStore((state) => state.deleteTrip);
+  const sairDaViagem = useTripStore((state) => state.sairDaViagem);
+  const uid = useAuthStore((state) => state.user?.id);
   const partilharViagem = useTripStore((state) => state.partilharViagem);
   const pararPartilha = useTripStore((state) => state.pararPartilha);
   const [aPartilhar, setAPartilhar] = useState(false);
@@ -116,7 +120,7 @@ export default function DetalhesViagemScreen() {
       setAPartilhar(false);
     }
     await Share.share({
-      message: `Junta-te à minha viagem "${trip.name}" no TripSplit!\n\nAbre o TripSplit → "Importar viagem" e escreve o código: ${code}\n\n(válido até ${formatIntervalo(new Date(expiraEm))})`,
+      message: `Junta-te à minha viagem "${trip.name}" no TripSplit!\n\nAbre o TripSplit, toca em "Usar código" e escreve: ${code}\n\n(válido até ${formatIntervalo(new Date(expiraEm))})`,
       title: `Viagem: ${trip.name}`,
     });
   };
@@ -155,7 +159,7 @@ export default function DetalhesViagemScreen() {
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Remover', style: 'destructive',
-        onPress: () => updateTrip(trip.id, { participants: trip.participants.filter(p => p.id !== participant.id) }),
+        onPress: () => removeParticipant(trip.id, participant.id),
       },
     ]);
   };
@@ -163,12 +167,24 @@ export default function DetalhesViagemScreen() {
   const handleRemoveExpense = (id) => {
     Alert.alert('Eliminar despesa', 'Tens a certeza que queres eliminar esta despesa?', [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => updateTrip(trip.id, { expenses: trip.expenses.filter(e => e.id !== id) }) },
+      { text: 'Eliminar', style: 'destructive', onPress: () => removeExpense(trip.id, id) },
+    ]);
+  };
+
+  const souDono = !trip.ownerId || trip.ownerId === uid;
+  const nMembros = trip.members?.length ?? 1;
+
+  const handleSair = () => {
+    Alert.alert('Sair da viagem', 'Deixas de ver esta viagem. Os dados ficam para os outros membros. Para voltar, precisas de um código novo.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: () => { sairDaViagem(trip.id); navigation.goBack(); } },
     ]);
   };
 
   const handleDelete = () => {
-    Alert.alert('Eliminar viagem', 'Esta ação é irreversível. Tens a certeza?', [
+    Alert.alert('Eliminar viagem', nMembros > 1
+      ? `A viagem é apagada para todos os ${nMembros} membros. Esta ação é irreversível.`
+      : 'Esta ação é irreversível. Tens a certeza?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Eliminar', style: 'destructive', onPress: () => { deleteTrip(trip.id); navigation.goBack(); } },
     ]);
@@ -206,6 +222,12 @@ export default function DetalhesViagemScreen() {
                 <View style={s.metaItem}>
                   <Ionicons name="calendar-outline" size={15} color={c.text2} />
                   <Text style={s.metaTexto}>{datas}</Text>
+                </View>
+              ) : null}
+              {nMembros > 1 ? (
+                <View style={s.metaItem} accessibilityLabel={`Partilhada com ${nMembros} pessoas`}>
+                  <Ionicons name="people-outline" size={16} color={c.text2} />
+                  <Text style={s.metaTexto}>{nMembros} membros</Text>
                 </View>
               ) : null}
               {trip.shareCode ? (
@@ -357,8 +379,13 @@ export default function DetalhesViagemScreen() {
             <LinhaAcao icon="close-circle-outline" titulo="Deixar de partilhar" onPress={handlePararPartilha} ultima />
           ) : null}
         </Cartao>
-        <Botao title="Eliminar viagem" icon="trash-outline" variant="text" textColor={c.negText}
-          onPress={handleDelete} style={{ marginTop: -12 }} />
+        {souDono ? (
+          <Botao title="Eliminar viagem" icon="trash-outline" variant="text" textColor={c.negText}
+            onPress={handleDelete} style={{ marginTop: -12 }} />
+        ) : (
+          <Botao title="Sair da viagem" icon="exit-outline" variant="text" textColor={c.negText}
+            onPress={handleSair} style={{ marginTop: -12 }} />
+        )}
       </ScrollView>
 
       {/* Botão fixo */}

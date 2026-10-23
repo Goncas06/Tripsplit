@@ -16,7 +16,7 @@ export default function RelatorioScreen() {
   const { viagemId, personId } = useRoute().params;
   const navigation = useNavigation();
   const trip = useTripStore(state => state.trips.find(t => t.id === viagemId));
-  const updateTrip = useTripStore(state => state.updateTrip);
+  const removeParticipant = useTripStore(state => state.removeParticipant);
   const c = useTheme();
   const s = useMemo(() => makeStyles(c), [c]);
 
@@ -67,7 +67,7 @@ export default function RelatorioScreen() {
     Alert.alert('Remover participante', `Tens a certeza que queres remover ${person?.name} da viagem?`, [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Remover', style: 'destructive', onPress: () => {
-        updateTrip(trip.id, { participants: trip.participants.filter(p => p.id !== personId) });
+        removeParticipant(trip.id, personId);
         navigation.goBack();
       } },
     ]);

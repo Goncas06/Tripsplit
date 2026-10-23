@@ -19,7 +19,7 @@ Desenvolvida em **React Native (Expo)** com **Firebase** como backend, para iOS 
 - **Despesas** com valor, categoria, quem pagou, entre quem se divide e **foto do recibo** (câmara ou galeria)
 - **Acertos automáticos**: saldo de cada pessoa e lista curta de transferências para ficar tudo pago
 - **Resumo e relatórios**: gasto por categoria e relatório individual de cada participante
-- **Partilha por código curto** (ex: `AALX40`): um amigo importa a viagem só com 6 caracteres
+- **Viagens partilhadas em tempo real**: os amigos entram na viagem com um código curto (ex: `K7XB9Q`) e todos veem e editam as mesmas despesas, sincronizadas ao segundo
 - **Modo escuro AMOLED** e interface pensada para iPhone e Android
 - **Funciona com rede fraca**: as alterações aparecem logo e são sincronizadas quando houver ligação
 
@@ -38,8 +38,9 @@ Desenvolvida em **React Native (Expo)** com **Firebase** como backend, para iOS 
 
 - **Cálculo dos acertos** (`utils/acertos.js`): para cada pessoa calcula-se *pago − parte*; depois os devedores são emparelhados com os credores até os saldos ficarem a zero, arredondando ao cêntimo para evitar erros de vírgula flutuante.
 - **Escritas otimistas** (`store/storeViagens.js`): o estado local é atualizado de imediato e a gravação no Firestore segue em segundo plano. Sem rede, a app não bloqueia e não cria despesas duplicadas.
-- **Partilha por código** (`utils/codigoViagem.js`): códigos de 6 caracteres sem símbolos ambíguos (0/O, 1/I/L), gerados aleatoriamente (com `crypto.getRandomValues` quando disponível), com verificação de colisões. A cópia partilhada fica em `sharedTrips/{código}` e é atualizada sempre que a viagem muda.
-- **Segurança** (`firestore.rules`): cada utilizador só acede aos seus dados; as viagens partilhadas podem ser lidas por código mas **não listadas**, e só o dono as pode alterar.
+- **Viagens colaborativas** (`store/storeViagens.js`): cada viagem é um documento `trips/{id}` com `ownerId` e `members`; a app subscreve em tempo real (`onSnapshot`) as viagens de que o utilizador é membro. Despesas e participantes são alterados elemento a elemento (`arrayUnion`/`arrayRemove` em lote), para que edições simultâneas de pessoas diferentes não se sobreponham. As viagens do formato antigo são migradas automaticamente.
+- **Convites por código** (`utils/codigoViagem.js`): códigos de 6 caracteres sem símbolos ambíguos (0/O, 1/I/L), com verificação de colisões e validade de 30 dias. `sharedTrips/{código}` aponta para a viagem; quem o usa é acrescentado aos membros.
+- **Segurança** (`firestore.rules`): só membros leem e editam uma viagem; quem não é membro só se pode **acrescentar a si próprio** apresentando o código atual e dentro da validade; ninguém muda o dono nem remove outros membros; só o dono apaga. Os códigos não podem ser listados. As regras foram validadas com 37 testes no emulador do Firestore (`@firebase/rules-unit-testing`).
 - **Validação de dados importados** (`utils/share.js`): tudo o que chega de fora é validado antes de entrar na app.
 - **Valores em euros** (`utils/valor.js`): aceita `12,50`, `12.50` e `1.000,50`, rejeitando formatos ambíguos.
 - **Design system próprio** (`utils/theme.js`, `components/ui/`): tokens de cor para claro/escuro, tipografia e componentes reutilizáveis, com atenção à acessibilidade (VoiceOver, "Reduzir movimento", alvos de toque ≥ 44px).

@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { useAuthStore } from './store/storeAuth';
 import { useThemeStore, useTheme } from './store/storeTheme';
+import { useTripStore } from './store/storeViagens';
 
 import * as SplashScreen from 'expo-splash-screen';
 import LoginScreen from './screens/LoginScreen';
@@ -98,6 +99,13 @@ export default function App() {
   // O ecrã de arranque nativo fica visível até a sessão e o tema estarem prontos,
   // e sai com um fade curto — sem ecrãs intermédios nem "flash" de cores
   const pronto = !loading && themeLoaded;
+
+  // Viagens em tempo real enquanto houver sessão (pára ao sair ou mudar de conta)
+  const subscreverViagens = useTripStore(s => s.subscreverViagens);
+  useEffect(() => {
+    if (!user?.id) return;
+    return subscreverViagens();
+  }, [user?.id]);
   useEffect(() => {
     if (pronto) SplashScreen.hideAsync().catch(() => {});
   }, [pronto]);

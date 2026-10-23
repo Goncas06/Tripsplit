@@ -1,38 +1,77 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Cada utilizador só lê e escreve os seus próprios dados (perfil e viagens)
+
+    // Perfil de cada utilizador e viagens no formato antigo (migradas automaticamente pela app)
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Viagens partilhadas por código curto (ex: AALX40), válidas por 30 dias
+    // ── Viagens partilhadas: um documento por viagem, visível a todos os membros ──
+    match /trips/{tripId} {
+      function signedIn() { return request.auth != null; }
+      function isMember() { return signedIn() && request.auth.uid in resource.data.members; }
+      function novo() { return request.resource.data; }
+
+      // Ler (incluindo a lista "as minhas viagens", que filtra por members)
+      allow read: if isMember();
+
+      // Criar: quem cria é o dono e o único membro
+      allow create: if signedIn()
+        && novo().ownerId == request.auth.uid
+        && novo().members == [request.auth.uid];
+
+      // Membros editam a viagem, sem mudar o dono; nos membros só podem sair (remover-se a si)
+      allow update: if isMember()
+        && novo().ownerId == resource.data.ownerId
+        && (novo().members == resource.data.members
+            || novo().members == resource.data.members.removeAll([request.auth.uid]));
+
+      // Juntar-se com código: quem não é membro só pode acrescentar-se a si próprio,
+      // indicando o código atual da viagem, e só enquanto o código for válido
+      allow update: if signedIn()
+        && !(request.auth.uid in resource.data.members)
+        && novo().diff(resource.data).affectedKeys().hasOnly(['members', 'joinCode'])
+        && novo().members == resource.data.members.concat([request.auth.uid])
+        && novo().joinCode == resource.data.shareCode
+        && resource.data.shareExpiresAt > request.time;
+
+      // Só o dono elimina a viagem (para todos)
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ── Códigos de partilha (ex: AALX40) → viagem, válidos 30 dias ──
     match /sharedTrips/{code} {
-      // Só os campos esperados, o dono é quem escreve e a validade não passa de ~30 dias
+      function membroDaViagem(tripId) {
+        return request.auth.uid in get(/databases/$(database)/documents/trips/$(tripId)).data.members;
+      }
       function dadosValidos() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['ownerId', 'trip', 'updatedAt', 'expiresAt'])
+        return d.keys().hasOnly(['tripId', 'ownerId', 'expiresAt', 'updatedAt'])
           && d.ownerId == request.auth.uid
-          && d.trip is map
+          && d.tripId is string
           && d.updatedAt is int
           && d.expiresAt is timestamp
-          && d.expiresAt <= request.time + duration.value(31, 'd');
+          && d.expiresAt <= request.time + duration.value(31, 'd')
+          && membroDaViagem(d.tripId);
       }
 
-      // Abrir pelo código, enquanto não expirar (um código inexistente devolve "não existe")
+      // Abrir pelo código enquanto não expirar (um código inexistente devolve "não existe")
       allow get: if request.auth != null
         && (resource == null || resource.data.expiresAt > request.time);
       // Impede listar/enumerar todos os códigos
       allow list: if false;
-      // Códigos só no formato da app: 6 caracteres sem 0/O, 1/I/L
+      // Códigos só no formato da app: 6 caracteres sem 0/O, 1/I/L; quem cria tem de ser membro
       allow create: if request.auth != null
         && code.matches('^[A-HJKMNP-Z2-9]{6}$')
         && dadosValidos();
-      // Só o dono altera (sem poder passar a viagem a outra pessoa) ou apaga
+      // Qualquer membro da viagem renova ou apaga o código (sem o apontar para outra viagem)
       allow update: if request.auth != null
-        && resource.data.ownerId == request.auth.uid
-        && dadosValidos();
-      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+        && dadosValidos()
+        && request.resource.data.tripId == resource.data.tripId;
+      allow delete: if request.auth != null
+        && resource.data.keys().hasAll(['tripId'])
+        && membroDaViagem(resource.data.tripId);
     }
   }
 }
