@@ -73,7 +73,8 @@ function AppNavigator() {
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Viagens', ...semTitulo }} />
-      <Stack.Screen name="CriarViagem" component={CriarViagemScreen} options={{ title: 'Nova viagem' }} />
+      <Stack.Screen name="CriarViagem" component={CriarViagemScreen}
+        options={({ route }) => ({ title: route.params?.viagemId ? 'Editar viagem' : 'Nova viagem' })} />
       <Stack.Screen name="DetalhesViagem" component={DetalhesViagemScreen} options={{ title: 'Viagem', ...semTitulo }} />
       <Stack.Screen name="AdicionarParticipante" component={AdicionarParticipanteScreen} options={{ title: 'Participante' }} />
       <Stack.Screen name="AdicionarDespesa" component={AdicionarDespesaScreen}

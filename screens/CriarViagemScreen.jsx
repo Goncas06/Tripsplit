@@ -1,13 +1,13 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTripStore } from '../store/storeViagens';
 import { useTheme } from '../store/storeTheme';
 import Botao from '../components/ui/Botao';
 import { Campo, FolhaInferior } from '../components/ui';
-import { MESES, formatDate, formatIntervalo, noites } from '../utils/datas';
+import { MESES, formatDate, formatIntervalo, noites, parseDatas } from '../utils/datas';
 import { useConfirmarSaida } from '../utils/useConfirmarSaida';
 
 const uuidv4 = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -96,21 +96,33 @@ function CalendarioDatas({ visible, inicial, onConfirm, onClose }) {
   );
 }
 
-// ── Ecrã ─────────────────────────────────────────────────────────────────────
+// ── Ecrã (criar e, com params.viagemId, editar) ──────────────────────────────
 export default function CriarViagemScreen() {
-  const [name, setName] = useState('');
-  const [destination, setDestination] = useState('');
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+  const { viagemId } = useRoute().params ?? {};
+  const original = useTripStore((state) => (viagemId ? state.trips.find(t => t.id === viagemId) : null));
+  const inicial = useRef({
+    name: original?.name ?? '',
+    destination: original?.destination ?? '',
+    ...parseDatas(original?.dates),
+  }).current;
+
+  const [name, setName] = useState(inicial.name);
+  const [destination, setDestination] = useState(inicial.destination);
+  const [startDate, setStartDate] = useState(inicial.inicio);
+  const [endDate, setEndDate] = useState(inicial.fim);
   const [showCal, setShowCal] = useState(false);
 
   const navigation = useNavigation();
   const addTrip = useTripStore((state) => state.addTrip);
+  const updateTripFields = useTripStore((state) => state.updateTripFields);
+  const editar = !!viagemId;
   const destRef = useRef(null);
   const c = useTheme();
   const s = useMemo(() => makeStyles(c), [c]);
   const insets = useSafeAreaInsets();
-  const permitirSaida = useConfirmarSaida(!!(name.trim() || destination.trim() || startDate));
+  const alterado = name !== inicial.name || destination !== inicial.destination
+    || formatDate(startDate) !== formatDate(inicial.inicio) || formatDate(endDate) !== formatDate(inicial.fim);
+  const permitirSaida = useConfirmarSaida(alterado);
 
   const datesString = () => {
     if (!startDate) return '';
@@ -123,6 +135,10 @@ export default function CriarViagemScreen() {
     if (!destination.trim()) { Alert.alert('Erro', 'Insere o destino da viagem.'); return; }
     permitirSaida();
     navigation.goBack();
+    if (editar) {
+      updateTripFields(viagemId, { name: name.trim(), destination: destination.trim(), dates: datesString() });
+      return;
+    }
     addTrip({
       id: uuidv4(),
       name: name.trim(),
@@ -149,7 +165,7 @@ export default function CriarViagemScreen() {
       <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
         <Campo
           label="Nome da viagem" icon="pricetag-outline" placeholder="Ex: Algarve 2026"
-          value={name} onChangeText={setName} autoFocus returnKeyType="next" maxLength={60}
+          value={name} onChangeText={setName} autoFocus={!editar} returnKeyType="next" maxLength={60}
           onSubmitEditing={() => destRef.current?.focus()} accessibilityLabel="Nome da viagem"
         />
         <Campo
@@ -168,7 +184,7 @@ export default function CriarViagemScreen() {
       </ScrollView>
 
       <View style={[s.rodape, { paddingBottom: insets.bottom + 12 }]}>
-        <Botao title="Criar viagem" onPress={handleCreate} disabled={!name.trim() || !destination.trim()} />
+        <Botao title={editar ? 'Guardar alterações' : 'Criar viagem'} onPress={handleCreate} disabled={!name.trim() || !destination.trim()} />
       </View>
 
       {showCal && (
