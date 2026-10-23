@@ -5,7 +5,8 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "ios": "expo start --ios"
+    "ios": "expo start --ios",
+    "test": "jest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -14,7 +15,6 @@
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@react-navigation/native": "^7.5.0",
     "@react-navigation/native-stack": "^7.20.0",
-    "babel-preset-expo": "~57.0.0",
     "expo": "~57.0.31",
     "expo-constants": "~57.0.22",
     "expo-font": "~57.0.4",
@@ -30,6 +30,18 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "jest": "~29.7.0",
+    "jest-expo": "~57.0.6",
+    "babel-preset-expo": "~57.0.0"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/regras/"
+    ]
   },
   "private": true
 }

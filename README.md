@@ -14,10 +14,11 @@ Desenvolvida em **React Native (Expo)** com **Firebase** como backend, para iOS 
 
 ## Funcionalidades
 
-- **Contas de utilizador** com email e password (Firebase Authentication) e sessão persistente
+- **Contas de utilizador** com email e password (Firebase Authentication), sessão persistente, recuperação de password e opção de apagar a conta e os dados
 - **Viagens** com destino, datas (calendário de intervalo) e participantes
 - **Despesas** com valor, categoria, quem pagou, entre quem se divide e **foto do recibo** (câmara ou galeria)
-- **Acertos automáticos**: saldo de cada pessoa e lista curta de transferências para ficar tudo pago
+- **Acertos automáticos**: saldo de cada pessoa e lista curta de transferências para ficar tudo pago; cada transferência pode ser **marcada como paga** (e anulada), atualizando os saldos de todos
+- **Editar viagens**: nome, destino e datas a qualquer momento
 - **Resumo e relatórios**: gasto por categoria e relatório individual de cada participante
 - **Viagens partilhadas em tempo real**: os amigos entram na viagem com um código curto (ex: `K7XB9Q`) e todos veem e editam as mesmas despesas, sincronizadas ao segundo
 - **Amigos**: código de amigo pessoal, pedidos de amizade (aceitar/recusar) e convite direto de amigos para uma viagem
@@ -55,6 +56,8 @@ components/ui/          componentes base (Botão, Cartão, Campo, Avatar, Folha 
 store/                  estado global (Zustand): autenticação, viagens, tema
 utils/                  lógica: acertos, valores, datas, partilha, Firebase
 firestore.rules         regras de segurança do Firestore
+__tests__/              testes unitários (Jest)
+tests/regras/           testes das regras de segurança (emulador do Firestore)
 ```
 
 ## Correr o projeto
@@ -72,6 +75,22 @@ npm start                 # lê o QR code com o Expo Go
 O projeto usa um projeto Firebase próprio (`utils/firebase.js`). Para usares o teu, cria uma app Web no Firebase Console, substitui a configuração e publica as regras de `firestore.rules`.
 
 > O login com Google precisa de uma build nativa (`npx expo run:ios` / `run:android`); no Expo Go está disponível o login com email e password.
+
+## Testes
+
+```bash
+npm test                         # testes unitários (Jest): acertos, valores, datas, códigos, importação
+```
+
+As **regras de segurança do Firestore** têm 58 testes próprios, corridos no emulador local do Firebase (precisa de Java 11+):
+
+```bash
+cd tests/regras
+npm install
+npm test
+```
+
+Cobrem: só membros leem/editam viagens, adesão por código válido e não expirado, convites só entre amigos com amizade aceite, pedidos de amizade, e que ninguém muda o dono, expulsa outros membros ou lista códigos.
 
 ## Autor
 

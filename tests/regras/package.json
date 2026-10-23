@@ -1,0 +1,13 @@
+{
+  "name": "tripsplit-testes-regras",
+  "private": true,
+  "description": "Testes das regras de segurança do Firestore (emulador local, sem tocar no projeto real)",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-tripsplit \"node regras.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.0",
+    "firebase": "^11.0.0",
+    "firebase-tools": "^13.0.0"
+  }
+}
