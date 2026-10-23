@@ -216,6 +216,26 @@ const useTripStore = create((set, get) => {
       if (antigo) substituirElemento(id, 'participants', antigo, null);
     },
 
+    // ── Convidar amigos ───────────────────────────────────────────────────────
+    // Acrescenta um amigo (amizade aceite) aos membros e como participante, numa só escrita.
+    // As regras só o permitem se a amizade existir.
+    convidarAmigo: (id, amigo) => {
+      const t = viagem(id);
+      if (!t || t.members.includes(amigo.uid)) return;
+      const jaParticipa = t.participants.some(p => p.userId === amigo.uid);
+      const participante = { id: uuidv4(), name: amigo.name, userId: amigo.uid };
+      mudarLocal(id, x => ({
+        ...x,
+        members: [...x.members, amigo.uid],
+        participants: jaParticipa ? x.participants : [...x.participants, participante],
+      }));
+      persist(updateDoc(tripRef(id), {
+        members: arrayUnion(amigo.uid),
+        ...(jaParticipa ? {} : { participants: arrayUnion(participante) }),
+        updatedAt: Date.now(),
+      }), 'convidarAmigo');
+    },
+
     // ── Partilha por código ───────────────────────────────────────────────────
     // Devolve { code, expiraEm }: cria o código na primeira partilha e renova a validade
     // (30 dias) a cada partilha. Qualquer membro pode partilhar. Precisa de internet.

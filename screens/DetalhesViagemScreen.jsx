@@ -7,10 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTripStore } from '../store/storeViagens';
 import { useAuthStore } from '../store/storeAuth';
+import { useAmigosStore, separarLigacoes } from '../store/storeAmigos';
 import { useTheme } from '../store/storeTheme';
 import Botao from '../components/ui/Botao';
 import Cartao from '../components/ui/Cartao';
-import { Avatar, BadgeValor, IconeCategoria, TituloSecao, Separador, LinhaAcao } from '../components/ui';
+import { Avatar, BadgeValor, IconeCategoria, TituloSecao, Separador, LinhaAcao, FolhaInferior } from '../components/ui';
 import { getPersonalBalance, getSettlements } from '../utils/acertos';
 import { categoria, corParticipante } from '../utils/categorias';
 import { datasDaViagem, formatIntervalo } from '../utils/datas';
@@ -95,6 +96,9 @@ export default function DetalhesViagemScreen() {
   const removeExpense = useTripStore((state) => state.removeExpense);
   const deleteTrip = useTripStore((state) => state.deleteTrip);
   const sairDaViagem = useTripStore((state) => state.sairDaViagem);
+  const convidarAmigo = useTripStore((state) => state.convidarAmigo);
+  const ligacoes = useAmigosStore((state) => state.ligacoes);
+  const [convidarVisivel, setConvidarVisivel] = useState(false);
   const uid = useAuthStore((state) => state.user?.id);
   const partilharViagem = useTripStore((state) => state.partilharViagem);
   const pararPartilha = useTripStore((state) => state.pararPartilha);
@@ -191,6 +195,7 @@ export default function DetalhesViagemScreen() {
   };
 
   const nomeDe = (id) => trip.participants.find(p => p.id === id)?.name ?? '?';
+  const amigos = separarLigacoes(ligacoes, uid).amigos;
   const datas = datasDaViagem(trip.dates);
   const partilhaAtiva = !!trip.shareCode && (trip.shareExpiresAt ?? 0) > Date.now();
   const validade = trip.shareExpiresAt ? formatIntervalo(new Date(trip.shareExpiresAt)) : '';
@@ -371,6 +376,7 @@ export default function DetalhesViagemScreen() {
 
         {/* Ações */}
         <Cartao clip>
+          <LinhaAcao icon="person-add-outline" titulo="Convidar amigos" onPress={() => setConvidarVisivel(true)} />
           <LinhaAcao icon="swap-horizontal" titulo="Ver acertos detalhados" onPress={() => handleNav('Saldos')} />
           <LinhaAcao icon="pie-chart-outline" titulo="Resumo final" onPress={() => handleNav('Resumo')} />
           <LinhaAcao icon="share-social-outline" titulo={partilhaAtiva ? 'Partilhar de novo (renova o código)' : 'Partilhar viagem'}
@@ -395,6 +401,45 @@ export default function DetalhesViagemScreen() {
       </LinearGradient>
 
       <ReceiptModal uri={receiptModalUri} onClose={() => setReceiptModalUri(null)} />
+
+      {/* Convidar amigos: entram como membros e como participantes */}
+      <FolhaInferior visible={convidarVisivel} onClose={() => setConvidarVisivel(false)}>
+        <View style={{ gap: 4 }}>
+          <Text style={s.folhaTitulo}>Convidar amigos</Text>
+          <Text style={s.folhaTexto}>Quem convidares passa a ver e a editar esta viagem, e entra como participante.</Text>
+        </View>
+        {amigos.length === 0 ? (
+          <View style={{ gap: 12 }}>
+            <Text style={s.folhaTexto}>Ainda não tens amigos na app.</Text>
+            <Botao title="Adicionar amigos" icon="people-outline" variant="secondary"
+              onPress={() => { setConvidarVisivel(false); navigation.navigate('Amigos'); }} />
+          </View>
+        ) : (
+          <ScrollView style={{ maxHeight: 360 }}>
+            {amigos.map((a, i) => {
+              const jaEsta = trip.members?.includes(a.uid);
+              return (
+                <React.Fragment key={a.id}>
+                  <View style={s.convite}>
+                    <Avatar nome={a.name} cor={corParticipante(trip, trip.participants.find(p => p.userId === a.uid)?.id)} tamanho={40} />
+                    <Text style={s.conviteNome} numberOfLines={1}>{a.name}</Text>
+                    {jaEsta ? (
+                      <View style={s.conviteEsta}>
+                        <Ionicons name="checkmark" size={16} color={c.text2} />
+                        <Text style={s.conviteEstaTexto}>Na viagem</Text>
+                      </View>
+                    ) : (
+                      <Botao title="Convidar" height={36} radius={18} style={{ minWidth: 110 }}
+                        onPress={() => convidarAmigo(trip.id, a)} accessibilityLabel={`Convidar ${a.name}`} />
+                    )}
+                  </View>
+                  {i < amigos.length - 1 && <Separador inset={52} />}
+                </React.Fragment>
+              );
+            })}
+          </ScrollView>
+        )}
+      </FolhaInferior>
     </View>
   );
 }
@@ -451,5 +496,11 @@ const makeStyles = (c) => StyleSheet.create({
   swipeTexto: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
   vazio: { fontSize: 15, color: c.text2, textAlign: 'center', paddingVertical: 24 },
 
+  folhaTitulo: { fontSize: 20, fontWeight: '700', color: c.text },
+  folhaTexto: { fontSize: 15, color: c.text2 },
+  convite: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  conviteNome: { flex: 1, fontSize: 17, fontWeight: '600', color: c.text },
+  conviteEsta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  conviteEstaTexto: { fontSize: 14, fontWeight: '600', color: c.text2 },
   rodape: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 24 },
 });

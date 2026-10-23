@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from './store/storeAuth';
 import { useThemeStore, useTheme } from './store/storeTheme';
 import { useTripStore } from './store/storeViagens';
+import { useAmigosStore } from './store/storeAmigos';
 
 import * as SplashScreen from 'expo-splash-screen';
 import LoginScreen from './screens/LoginScreen';
@@ -22,6 +23,7 @@ import AdicionarDespesaScreen from './screens/AdicionarDespesaScreen';
 import SaldosScreen from './screens/SaldosScreen';
 import ResumoScreen from './screens/ResumoScreen';
 import RelatorioScreen from './screens/RelatorioScreen';
+import AmigosScreen from './screens/AmigosScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -79,6 +81,7 @@ function AppNavigator() {
       <Stack.Screen name="Saldos" component={SaldosScreen} options={{ title: 'Acertos' }} />
       <Stack.Screen name="Resumo" component={ResumoScreen} options={{ title: 'Resumo final' }} />
       <Stack.Screen name="Relatorio" component={RelatorioScreen} options={{ title: 'Relatório' }} />
+      <Stack.Screen name="Amigos" component={AmigosScreen} options={{ title: 'Amigos' }} />
     </Stack.Navigator>
   );
 }
@@ -102,9 +105,12 @@ export default function App() {
 
   // Viagens em tempo real enquanto houver sessão (pára ao sair ou mudar de conta)
   const subscreverViagens = useTripStore(s => s.subscreverViagens);
+  const subscreverAmigos = useAmigosStore(s => s.subscrever);
   useEffect(() => {
     if (!user?.id) return;
-    return subscreverViagens();
+    const pararViagens = subscreverViagens();
+    const pararAmigos = subscreverAmigos();
+    return () => { pararViagens(); pararAmigos(); };
   }, [user?.id]);
   useEffect(() => {
     if (pronto) SplashScreen.hideAsync().catch(() => {});

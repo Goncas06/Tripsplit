@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Botao from '../components/ui/Botao';
 import { Avatar, FolhaInferior } from '../components/ui';
 import { useTripStore } from '../store/storeViagens';
+import { useAmigosStore } from '../store/storeAmigos';
 import { useAuthStore } from '../store/storeAuth';
 import { useThemeStore, useTheme } from '../store/storeTheme';
 import { decodeTrip, buildImportedTrip } from '../utils/share';
@@ -88,6 +89,8 @@ export default function HomeScreen() {
   const { isDark, toggle } = useThemeStore();
   const c = useTheme();
   const s = useMemo(() => mk(c), [c]);
+  // Pedidos de amizade por responder (badge no ícone de amigos)
+  const pedidos = useAmigosStore((st) => st.ligacoes.filter(l => l.status === 'pending' && l.to === user?.id).length);
 
   const [importVisible,  setImportVisible]  = useState(false);
   const [importCode,     setImportCode]     = useState('');
@@ -97,13 +100,22 @@ export default function HomeScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Pressable onPress={() => setProfileVisible(true)} style={s.headerAvatar}
-          accessibilityRole="button" accessibilityLabel="Perfil">
-          <Avatar nome={user?.name} cor={c.userColor} tamanho={36} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable onPress={() => navigation.navigate('Amigos')} style={s.headerAvatar} accessibilityRole="button"
+            accessibilityLabel={pedidos ? `Amigos, ${pedidos} pedidos por responder` : 'Amigos'}>
+            <Ionicons name="people-outline" size={26} color={c.accent} />
+            {pedidos > 0 && (
+              <View style={s.badge}><Text style={s.badgeTexto}>{pedidos > 9 ? '9+' : pedidos}</Text></View>
+            )}
+          </Pressable>
+          <Pressable onPress={() => setProfileVisible(true)} style={s.headerAvatar}
+            accessibilityRole="button" accessibilityLabel="Perfil">
+            <Avatar nome={user?.name} cor={c.userColor} tamanho={36} />
+          </Pressable>
+        </View>
       ),
     });
-  }, [navigation, user?.name, s, c.userColor]);
+  }, [navigation, user?.name, s, c.userColor, c.accent, pedidos]);
 
   const codigoInvalido = () => Alert.alert('Código não encontrado',
     'Confirma que escreveste bem os 6 caracteres. Os códigos expiram ao fim de 30 dias — pede um novo a quem partilhou.');
@@ -245,6 +257,9 @@ const mk = (c) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 48, flexGrow: 1 },
   headerAvatar: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', top: 4, right: 2, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4,
+    backgroundColor: c.neg, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: c.bg },
+  badgeTexto: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
 
   titulo: { fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -0.7, color: c.text },
   subtitulo: { fontSize: 17, color: c.text2 },

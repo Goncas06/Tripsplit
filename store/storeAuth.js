@@ -12,6 +12,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import Constants from 'expo-constants';
 import { auth, db } from '../utils/firebase';
 import { useTripStore } from './storeViagens';
+import { useAmigosStore } from './storeAmigos';
 
 // O Expo Go não inclui o módulo nativo do Google Sign-In — só é carregado em builds próprias
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
@@ -32,6 +33,7 @@ const useAuthStore = create((set) => ({
   initAuth: () => {
     return onAuthStateChanged(auth, (firebaseUser) => {
       useTripStore.getState().reset();
+      useAmigosStore.getState().reset();
       if (firebaseUser) {
         set({
           user: {
