@@ -25,7 +25,7 @@ export default function RelatorioScreen() {
   const person = trip.participants.find(p => p.id === personId);
   const allIds = trip.participants.map(p => p.id);
   const settlements = getSettlements(trip);
-  const bal = getPersonalBalance(trip.expenses, allIds, personId);
+  const bal = getPersonalBalance(trip.expenses, allIds, personId, trip.payments);
   const nomeDe = (id) => trip.participants.find(p => p.id === id)?.name ?? '?';
 
   const expensesInvolved = trip.expenses

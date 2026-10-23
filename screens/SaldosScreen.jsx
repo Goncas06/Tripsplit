@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTripStore } from '../store/storeViagens';
@@ -7,6 +7,7 @@ import { getSettlements, getAllBalances } from '../utils/acertos';
 import { useTheme } from '../store/storeTheme';
 import Cartao from '../components/ui/Cartao';
 import { Avatar, TituloSecao, Separador } from '../components/ui';
+import { formatIntervalo } from '../utils/datas';
 import { corParticipante } from '../utils/categorias';
 import { eur, eurComSinal } from '../utils/valor';
 import { num } from '../utils/theme';
@@ -14,6 +15,8 @@ import { num } from '../utils/theme';
 export default function SaldosScreen() {
   const { viagemId } = useRoute().params;
   const trip = useTripStore((state) => state.trips.find(t => t.id === viagemId));
+  const addPayment = useTripStore((state) => state.addPayment);
+  const removePayment = useTripStore((state) => state.removePayment);
   const c = useTheme();
   const s = useMemo(() => makeStyles(c), [c]);
 
@@ -25,6 +28,25 @@ export default function SaldosScreen() {
   const totalTransf = settlements.reduce((sum, x) => sum + x.amount, 0);
   const nomeDe = (id) => trip.participants.find(p => p.id === id)?.name ?? '?';
   const semDespesas = trip.expenses.length === 0;
+  const pagamentos = [...(trip.payments ?? [])].sort((a, b) => (b.date || 0) - (a.date || 0));
+
+  const marcarPago = (item) => Alert.alert(
+    'Marcar como pago',
+    `Confirmas que ${nomeDe(item.debtor)} já pagou ${eur(item.amount)} a ${nomeDe(item.creditor)}?`,
+    [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Já pagou', onPress: () => addPayment(trip.id, { from: item.debtor, to: item.creditor, amount: item.amount }) },
+    ],
+  );
+
+  const anularPagamento = (pg) => Alert.alert(
+    'Anular pagamento',
+    `Anular o registo de ${nomeDe(pg.from)} → ${nomeDe(pg.to)} (${eur(pg.amount)})? O acerto volta a ficar pendente.`,
+    [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Anular', style: 'destructive', onPress: () => removePayment(trip.id, pg.id) },
+    ],
+  );
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={s.content}>
@@ -87,7 +109,8 @@ export default function SaldosScreen() {
           </Cartao>
         ) : (
           settlements.map((item, i) => (
-            <Cartao key={i} style={s.transf}>
+            <Cartao key={i} clip>
+            <View style={s.transf}>
               <View style={[s.transfLado, { alignItems: 'flex-start' }]}>
                 <Avatar nome={nomeDe(item.debtor)} cor={corParticipante(trip, item.debtor)} tamanho={40} />
                 <Text style={s.transfNome} numberOfLines={1}>{nomeDe(item.debtor)}</Text>
@@ -103,10 +126,44 @@ export default function SaldosScreen() {
                 <Avatar nome={nomeDe(item.creditor)} cor={corParticipante(trip, item.creditor)} tamanho={40} />
                 <Text style={s.transfNome} numberOfLines={1}>{nomeDe(item.creditor)}</Text>
               </View>
+            </View>
+            <Separador />
+            <Pressable onPress={() => marcarPago(item)} style={({ pressed }) => [s.pagoBtn, pressed && { backgroundColor: c.field }]}
+              accessibilityRole="button" accessibilityLabel={`Marcar como pago: ${nomeDe(item.debtor)} pagou ${eur(item.amount)} a ${nomeDe(item.creditor)}`}>
+              <Ionicons name="checkmark-circle-outline" size={19} color={c.posText} />
+              <Text style={s.pagoTexto}>Marcar como pago</Text>
+            </Pressable>
             </Cartao>
           ))
         )}
       </View>
+
+      {pagamentos.length > 0 && (
+        <View style={s.secao}>
+          <TituloSecao>Pagamentos registados</TituloSecao>
+          <Cartao clip>
+            {pagamentos.map((pg, i) => (
+              <React.Fragment key={pg.id}>
+                <View style={s.pagamento}>
+                  <Ionicons name="checkmark-circle" size={22} color={c.pos} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.pagamentoTexto} numberOfLines={1}>
+                      {nomeDe(pg.from)} → {nomeDe(pg.to)}
+                    </Text>
+                    {pg.date ? <Text style={s.pagamentoData}>{formatIntervalo(new Date(pg.date))}</Text> : null}
+                  </View>
+                  <Text style={[s.pagamentoValor, num]}>{eur(pg.amount)}</Text>
+                  <Pressable onPress={() => anularPagamento(pg)} hitSlop={8} style={s.anular}
+                    accessibilityRole="button" accessibilityLabel={`Anular pagamento de ${nomeDe(pg.from)} a ${nomeDe(pg.to)}`}>
+                    <Ionicons name="arrow-undo-outline" size={19} color={c.text3} />
+                  </Pressable>
+                </View>
+                {i < pagamentos.length - 1 && <Separador inset={50} />}
+              </React.Fragment>
+            ))}
+          </Cartao>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -137,6 +194,13 @@ const makeStyles = (c) => StyleSheet.create({
   pagaA: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   pagaATexto: { fontSize: 12, color: c.text3 },
 
+  pagoBtn: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  pagoTexto: { fontSize: 15, fontWeight: '600', color: c.posText },
+  pagamento: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 8 },
+  pagamentoTexto: { fontSize: 16, fontWeight: '600', color: c.text },
+  pagamentoData: { fontSize: 12, color: c.text2 },
+  pagamentoValor: { fontSize: 16, fontWeight: '700', color: c.text },
+  anular: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
   vazio: { height: 64, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 },
   vazioTexto: { fontSize: 16, color: c.text2, flex: 1 },
 });

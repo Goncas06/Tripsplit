@@ -314,7 +314,7 @@ export default function DetalhesViagemScreen() {
           <TituloSecao>Participantes</TituloSecao>
           <Cartao clip>
             {trip.participants.map((p) => {
-              const bal = getPersonalBalance(trip.expenses, allIds, p.id);
+              const bal = getPersonalBalance(trip.expenses, allIds, p.id, trip.payments);
               const label = bal.net > 0.005 ? 'A receber' : bal.net < -0.005 ? 'A pagar' : 'Equilibrado';
               return (
                 <React.Fragment key={p.id}>
@@ -377,6 +377,7 @@ export default function DetalhesViagemScreen() {
         {/* Ações */}
         <Cartao clip>
           <LinhaAcao icon="person-add-outline" titulo="Convidar amigos" onPress={() => setConvidarVisivel(true)} />
+          <LinhaAcao icon="create-outline" titulo="Editar viagem" onPress={() => navigation.navigate('CriarViagem', { viagemId: trip.id })} />
           <LinhaAcao icon="swap-horizontal" titulo="Ver acertos detalhados" onPress={() => handleNav('Saldos')} />
           <LinhaAcao icon="pie-chart-outline" titulo="Resumo final" onPress={() => handleNav('Resumo')} />
           <LinhaAcao icon="share-social-outline" titulo={partilhaAtiva ? 'Partilhar de novo (renova o código)' : 'Partilhar viagem'}

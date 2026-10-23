@@ -65,6 +65,7 @@ const paraViagem = (d) => {
     id: d.id,
     participants: semDuplicados(data.participants),
     expenses: semDuplicados(data.expenses),
+    payments: semDuplicados(data.payments),
     members: data.members ?? [],
     shareExpiresAt: data.shareExpiresAt?.toMillis?.() ?? data.shareExpiresAt ?? null,
   };
@@ -150,6 +151,20 @@ const useTripStore = create((set, get) => {
       return () => { ativo = false; pararOuvir(); };
     },
 
+    // Para apagar a conta: elimina as viagens criadas pelo utilizador e sai das restantes
+    apagarDadosDoUtilizador: async () => {
+      const uid = getUid();
+      for (const t of get().trips) {
+        if (!t.ownerId || t.ownerId === uid) {
+          if (t.shareCode) await deleteDoc(sharedDoc(t.shareCode)).catch(() => {});
+          await deleteDoc(tripRef(t.id));
+        } else {
+          await updateDoc(tripRef(t.id), { members: arrayRemove(uid) });
+        }
+      }
+      set({ trips: [] });
+    },
+
     // ── Viagem ────────────────────────────────────────────────────────────────
     addTrip: (trip) => {
       const uid = getUid();
@@ -203,6 +218,18 @@ const useTripStore = create((set, get) => {
       const antiga = viagem(id)?.expenses.find(e => e.id === expenseId);
       mudarLocal(id, t => ({ ...t, expenses: t.expenses.filter(e => e.id !== expenseId) }));
       if (antiga) substituirElemento(id, 'expenses', antiga, null);
+    },
+
+    // ── Pagamentos de acertos ("Rita pagou €23 ao João") ──────────────────────
+    addPayment: (id, { from, to, amount }) => {
+      const pagamento = { id: uuidv4(), from, to, amount, date: Date.now(), by: getUid() };
+      mudarLocal(id, t => ({ ...t, payments: [...(t.payments ?? []), pagamento] }));
+      substituirElemento(id, 'payments', null, pagamento);
+    },
+    removePayment: (id, paymentId) => {
+      const antigo = viagem(id)?.payments?.find(p => p.id === paymentId);
+      mudarLocal(id, t => ({ ...t, payments: (t.payments ?? []).filter(p => p.id !== paymentId) }));
+      if (antigo) substituirElemento(id, 'payments', antigo, null);
     },
 
     // ── Participantes ─────────────────────────────────────────────────────────

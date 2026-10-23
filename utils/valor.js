@@ -17,7 +17,15 @@ export const parseValor = (text) => {
 };
 
 // "€12,50" (sempre positivo)
-export const eur = (n) => '€' + (Math.round(Math.abs(n || 0) * 100) / 100).toFixed(2).replace('.', ',');
+// Arredonda ao cêntimo a partir da representação decimal (146,325 → 146,33).
+// Multiplicar diretamente por 100 falha porque 146,325 em binário é 146,32499999…
+export const arredondarCentimos = (x) => {
+  const s = Math.abs(x || 0).toPrecision(12);
+  const r = s.includes('e') ? Math.round(Math.abs(x) * 100) / 100 : Math.round(Number(`${s}e2`)) / 100;
+  return x < 0 ? -r : r;
+};
+
+export const eur = (n) => '€' + arredondarCentimos(Math.abs(n || 0)).toFixed(2).replace('.', ',');
 
 // "+€12,50" / "−€12,50" (sinal U+2212) / "€0,00"
 export const eurComSinal = (n) => {
