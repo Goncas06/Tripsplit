@@ -4,7 +4,8 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Botao from '../components/ui/Botao';
-import { Avatar, FolhaInferior } from '../components/ui';
+import { Avatar, FolhaInferior, Campo, CaixaErro } from '../components/ui';
+import { auth } from '../utils/firebase';
 import { useTripStore } from '../store/storeViagens';
 import { useAmigosStore } from '../store/storeAmigos';
 import { useAuthStore } from '../store/storeAuth';
@@ -96,6 +97,13 @@ export default function HomeScreen() {
   const [importCode,     setImportCode]     = useState('');
   const [importing,      setImporting]      = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
+  const [apagarVisivel,  setApagarVisivel]  = useState(false);
+  const [passApagar,     setPassApagar]     = useState('');
+  const [aApagar,        setAApagar]        = useState(false);
+  const [erroApagar,     setErroApagar]     = useState('');
+  const apagarConta = useAuthStore((st) => st.apagarConta);
+  // Contas de email/password confirmam com a password; contas Google não têm password
+  const precisaPassword = auth.currentUser?.providerData?.some(p => p.providerId === 'password') ?? true;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -159,6 +167,23 @@ export default function HomeScreen() {
   };
 
   const fecharImport = () => { setImportVisible(false); setImportCode(''); };
+
+  const abrirApagar = () => {
+    setProfileVisible(false);
+    // Espera a folha de perfil fechar antes de abrir a seguinte (o iOS não abre dois modais seguidos)
+    setTimeout(() => setApagarVisivel(true), 400);
+  };
+  const fecharApagar = () => { setApagarVisivel(false); setPassApagar(''); setErroApagar(''); };
+
+  const handleApagar = async () => {
+    setErroApagar('');
+    if (precisaPassword && !passApagar) { setErroApagar('Escreve a tua password para confirmar.'); return; }
+    setAApagar(true);
+    const r = await apagarConta(passApagar);
+    setAApagar(false);
+    if (r.error) { setErroApagar(r.error); return; }
+    fecharApagar(); // a sessão termina e a app volta ao ecrã de entrada
+  };
 
   const handleLogout = () => Alert.alert('Terminar sessão', 'Tens a certeza?', [
     { text: 'Cancelar', style: 'cancel' },
@@ -228,6 +253,25 @@ export default function HomeScreen() {
             trackColor={{ false: c.switchOff, true: c.accent }} thumbColor="#FFFFFF" ios_backgroundColor={c.switchOff} />
         </View>
         <Botao title="Terminar sessão" icon="log-out-outline" variant="danger" onPress={handleLogout} style={{ alignSelf: 'stretch' }} />
+        <Botao title="Apagar conta" variant="text" textColor={c.text3} onPress={abrirApagar} style={{ marginTop: -10 }} />
+      </FolhaInferior>
+
+      {/* Apagar conta */}
+      <FolhaInferior visible={apagarVisivel} onClose={fecharApagar}>
+        <View style={{ gap: 6 }}>
+          <Text style={s.folhaTitulo}>Apagar conta</Text>
+          <Text style={s.folhaTexto}>Isto apaga a tua conta e não pode ser desfeito:</Text>
+          <Text style={s.folhaTexto}>• as viagens que criaste (também para quem as partilha contigo){'\n'}• a tua participação nas viagens dos outros{'\n'}• os teus amigos e o teu código de amigo</Text>
+        </View>
+        {precisaPassword && (
+          <Campo label="Password" icon="lock-closed-outline" placeholder="Confirma com a tua password" secure
+            value={passApagar} onChangeText={setPassApagar} autoComplete="password" />
+        )}
+        <CaixaErro>{erroApagar}</CaixaErro>
+        <View style={{ gap: 6 }}>
+          <Botao title="Apagar definitivamente" icon="trash-outline" variant="danger" onPress={handleApagar} loading={aApagar} disabled={aApagar} />
+          <Botao title="Cancelar" variant="text" textColor={c.text2} onPress={fecharApagar} />
+        </View>
       </FolhaInferior>
 
       {/* Folha de importar */}

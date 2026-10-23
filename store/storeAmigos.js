@@ -85,6 +85,16 @@ const useAmigosStore = create((set, get) => ({
     return 'enviado';
   },
 
+  // Para apagar a conta: remove amizades/pedidos e o código de amigo
+  apagarDadosDoUtilizador: async () => {
+    const uid = getUid();
+    for (const l of get().ligacoes) await deleteDoc(doc(db, 'friendships', l.id));
+    const perfil = await getDoc(perfilRef(uid));
+    const code = get().meuCodigo ?? (perfil.exists() ? perfil.data().friendCode : null);
+    if (code) await deleteDoc(codeRef(code));
+    set({ ligacoes: [], meuCodigo: null });
+  },
+
   aceitar: (id) => updateDoc(doc(db, 'friendships', id), { status: 'accepted' }),
 
   // Recusar um pedido, cancelar um pedido enviado ou remover um amigo

@@ -7,8 +7,12 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithCredential,
+  sendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  deleteUser,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import Constants from 'expo-constants';
 import { auth, db } from '../utils/firebase';
 import { useTripStore } from './storeViagens';
@@ -113,6 +117,44 @@ const useAuthStore = create((set) => ({
   logout: async () => {
     try { await GoogleSignin?.signOut(); } catch {}
     await signOut(auth);
+  },
+
+  // Envia o email de recuperação. A resposta é sempre a mesma, exista ou não a conta
+  // (não revela que emails estão registados).
+  recuperarPassword: async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      return { success: true };
+    } catch (e) {
+      if (e.code === 'auth/invalid-email') return { error: 'Insere um email válido.' };
+      if (e.code === 'auth/network-request-failed') return { error: 'Sem ligação à internet.' };
+      if (e.code === 'auth/user-not-found') return { success: true };
+      return { error: 'Não foi possível enviar o email. Tenta novamente.' };
+    }
+  },
+
+  // Apaga a conta e os dados: viagens criadas pelo utilizador (para todos), saída das
+  // viagens dos outros, amizades, código de amigo e perfil. Pede a password por segurança.
+  apagarConta: async (password) => {
+    const u = auth.currentUser;
+    if (!u) return { error: 'Sessão inválida.' };
+    try {
+      if (u.providerData.some(p => p.providerId === 'password')) {
+        await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, password));
+      }
+      await useTripStore.getState().apagarDadosDoUtilizador();
+      await useAmigosStore.getState().apagarDadosDoUtilizador();
+      await deleteDoc(doc(db, 'users', u.uid));
+      try { await GoogleSignin?.signOut(); } catch {}
+      await deleteUser(u);
+      return { success: true };
+    } catch (e) {
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') return { error: 'Password incorreta.' };
+      if (e.code === 'auth/requires-recent-login') return { error: 'Por segurança, termina sessão, volta a entrar e tenta de novo.' };
+      if (e.code === 'auth/network-request-failed' || e.code === 'unavailable') return { error: 'Sem ligação à internet.' };
+      console.warn('[Apagar conta]', e?.code, e?.message);
+      return { error: 'Não foi possível apagar a conta. Tenta novamente.' };
+    }
   },
 }));
 

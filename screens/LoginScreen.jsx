@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ export default function LoginScreen({ onGoSignUp }) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const login          = useAuthStore((s) => s.login);
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
+  const recuperarPassword = useAuthStore((s) => s.recuperarPassword);
   const c = useTheme();
   const s = useMemo(() => mk(c), [c]);
   const insets = useSafeAreaInsets();
@@ -36,6 +37,15 @@ export default function LoginScreen({ onGoSignUp }) {
     const r = await loginWithGoogle();
     setGoogleLoading(false);
     if (r?.error) setError(r.error);
+  };
+
+  // Usa o email escrito no campo; a resposta não revela se a conta existe
+  const handleRecuperar = async () => {
+    setError('');
+    if (!email.trim()) { setError('Escreve o teu email no campo acima e toca outra vez em "Esqueci-me da password".'); return; }
+    const r = await recuperarPassword(email);
+    if (r.error) { setError(r.error); return; }
+    Alert.alert('Verifica o teu email', `Se existir uma conta com ${email.trim()}, vais receber um link para criar uma password nova. Confirma também a pasta de spam.`);
   };
 
   const busy = loading || googleLoading;
@@ -66,6 +76,9 @@ export default function LoginScreen({ onGoSignUp }) {
             inputRef={passRef} value={password} onChangeText={setPassword}
             autoComplete="password" returnKeyType="done" onSubmitEditing={handleLogin} maxLength={50}
           />
+          <Pressable onPress={handleRecuperar} hitSlop={10} style={s.esqueci} accessibilityRole="button">
+            <Text style={s.esqueciTexto}>Esqueci-me da password</Text>
+          </Pressable>
         </View>
 
         <CaixaErro>{error}</CaixaErro>
@@ -105,6 +118,8 @@ const mk = (c) => StyleSheet.create({
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   dividerLine: { flex: 1, height: 1, backgroundColor: c.fieldBorder },
   dividerText: { fontSize: 13, color: c.text3 },
+  esqueci: { alignSelf: 'flex-end', marginTop: -6 },
+  esqueciTexto: { fontSize: 14, fontWeight: '600', color: c.accentText },
   switchRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   switchText: { fontSize: 15, color: c.text2 },
   switchLink: { fontSize: 15, color: c.accentText, fontWeight: '600' },
