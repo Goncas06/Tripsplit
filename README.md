@@ -101,6 +101,8 @@ Projeto desenvolvido por:
 - **Gonçalo Duarte da Costa Oliveira Dias**
 - **David Gomes Moreira**
 
+O desenvolvimento contou com o **Claude Code** (assistente de programação com IA da Anthropic) como apoio na implementação, revisão e testes. As decisões de produto, a direção do projeto e a validação final foram dos autores.
+
 ## Licença
 
 © 2026 Gonçalo Duarte da Costa Oliveira Dias e David Gomes Moreira. **Todos os direitos reservados.**
