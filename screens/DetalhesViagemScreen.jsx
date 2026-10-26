@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useLayoutEffect, useRef } from 'react';
 import { ScrollView, View, Text, StyleSheet, Share, Alert, Image, Pressable, Modal } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Swipeable } from 'react-native-gesture-handler';
+import LinhaDeslizavel from '../components/ui/LinhaDeslizavel';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -58,7 +58,7 @@ function LinhaDespesa({ exp, trip, allIds, onEdit, onDelete, onReceipt, c, s }) 
   );
 
   return (
-    <Swipeable ref={ref} renderRightActions={renderAcoes} overshootRight={false} friction={1.6}>
+    <LinhaDeslizavel ref={ref} acoes={renderAcoes()} larguraAcoes={152}>
       <Pressable onPress={onEdit} style={({ pressed }) => [s.despesa, pressed && { backgroundColor: c.field }]}
         accessibilityRole="button" accessibilityHint="Desliza para a esquerda para editar ou apagar">
         <IconeCategoria cat={exp.category} />
@@ -79,7 +79,7 @@ function LinhaDespesa({ exp, trip, allIds, onEdit, onDelete, onReceipt, c, s }) 
           <Text style={[s.despesaPessoa, num]}>{eur(perPerson)}/pessoa</Text>
         </View>
       </Pressable>
-    </Swipeable>
+    </LinhaDeslizavel>
   );
 }
 
