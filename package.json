@@ -6,6 +6,7 @@
     "Gonçalo Duarte da Costa Oliveira Dias",
     "David Gomes Moreira"
   ],
+  "license": "UNLICENSED",
   "main": "index.js",
   "scripts": {
     "start": "expo start",

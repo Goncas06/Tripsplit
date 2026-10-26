@@ -100,3 +100,9 @@ Projeto desenvolvido por:
 
 - **Gonçalo Duarte da Costa Oliveira Dias**
 - **David Gomes Moreira**
+
+## Licença
+
+© 2026 Gonçalo Duarte da Costa Oliveira Dias e David Gomes Moreira. **Todos os direitos reservados.**
+
+O código está público apenas para consulta. Não é permitido usar, copiar, modificar ou distribuir este projeto sem autorização escrita dos autores — ver [LICENSE](LICENSE).
