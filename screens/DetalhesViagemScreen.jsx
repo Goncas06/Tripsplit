@@ -380,7 +380,7 @@ export default function DetalhesViagemScreen() {
           <LinhaAcao icon="create-outline" titulo="Editar viagem" onPress={() => navigation.navigate('CriarViagem', { viagemId: trip.id })} />
           <LinhaAcao icon="swap-horizontal" titulo="Ver acertos detalhados" onPress={() => handleNav('Saldos')} />
           <LinhaAcao icon="pie-chart-outline" titulo="Resumo final" onPress={() => handleNav('Resumo')} />
-          <LinhaAcao icon="share-social-outline" titulo={partilhaAtiva ? 'Partilhar de novo (renova o código)' : 'Partilhar viagem'}
+          <LinhaAcao icon="share-social-outline" titulo={partilhaAtiva ? 'Renovar código de partilha' : 'Partilhar viagem'}
             onPress={handleShare} ultima={!trip.shareCode} />
           {trip.shareCode ? (
             <LinhaAcao icon="close-circle-outline" titulo="Deixar de partilhar" onPress={handlePararPartilha} ultima />

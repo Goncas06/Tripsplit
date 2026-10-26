@@ -4,13 +4,13 @@ Aplicação móvel para **dividir despesas de viagens em grupo**. Regista quem p
 
 Desenvolvida em **React Native (Expo)** com **Firebase** como backend, para iOS e Android.
 
-<!--
-  Capturas de ecrã: coloca as imagens em docs/ com estes nomes e descomenta a tabela.
+| Entrar | Detalhes da viagem | Saldos por pessoa |
+|:---:|:---:|:---:|
+| <img src="docs/login.png" width="230" alt="Ecrã de entrada"> | <img src="docs/detalhes.png" width="230" alt="Detalhes da viagem com total gasto e acertos pendentes"> | <img src="docs/participantes.png" width="230" alt="Participantes com saldo a receber ou a pagar"> |
+| **Despesas** | **Nova despesa** | **Relatório individual** |
+| <img src="docs/despesas.png" width="230" alt="Lista de despesas com categoria e valor por pessoa"> | <img src="docs/nova-despesa.png" width="230" alt="Nova despesa: valor, categoria, quem pagou"> | <img src="docs/relatorio.png" width="230" alt="Relatório de uma pessoa: saldo, a pagar e despesas"> |
 
-| Início | Detalhes da viagem | Nova despesa | Modo escuro |
-|:---:|:---:|:---:|:---:|
-| <img src="docs/inicio.png" width="200"> | <img src="docs/detalhes.png" width="200"> | <img src="docs/despesa.png" width="200"> | <img src="docs/escuro.png" width="200"> |
--->
+<sub>Capturas no iPhone, modo escuro AMOLED (o botão da roda dentada é a ferramenta de desenvolvimento do Expo Go).</sub>
 
 ## Funcionalidades
 

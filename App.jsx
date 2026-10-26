@@ -68,7 +68,8 @@ function AppNavigator() {
     contentStyle: { backgroundColor: c.bg },
   };
   // Ecrãs com título grande no conteúdo: o "title" serve só de texto do botão voltar (iOS)
-  const semTitulo = { headerTitle: () => null };
+  // (um componente vazio, e não null: no iOS 26 o null faz o cabeçalho mostrar o título na mesma)
+  const semTitulo = { headerTitle: () => <View /> };
 
   return (
     <Stack.Navigator screenOptions={screenOptions}>
