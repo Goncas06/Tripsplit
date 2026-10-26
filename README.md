@@ -12,6 +12,8 @@ Desenvolvida em **React Native (Expo)** com **Firebase** como backend, para iOS 
 
 <sub>Capturas no iPhone, modo escuro AMOLED (o botão da roda dentada é a ferramenta de desenvolvimento do Expo Go).</sub>
 
+📸 **[Ver todos os ecrãs, com descrição →](docs/CAPTURAS.md)**
+
 ## Funcionalidades
 
 - **Contas de utilizador** com email e password (Firebase Authentication), sessão persistente, recuperação de password e opção de apagar a conta e os dados
@@ -92,6 +94,9 @@ npm test
 
 Cobrem: só membros leem/editam viagens, adesão por código válido e não expirado, convites só entre amigos com amizade aceite, pedidos de amizade, e que ninguém muda o dono, expulsa outros membros ou lista códigos.
 
-## Autor
+## Autores
 
-**Gonçalo Dias** — estudante de Engenharia Informática
+Projeto desenvolvido por:
+
+- **Gonçalo Duarte da Costa Oliveira Dias**
+- **David Gomes Moreira**

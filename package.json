@@ -1,6 +1,11 @@
 {
   "name": "tripsplit",
   "version": "1.0.0",
+  "description": "Aplicação móvel para dividir despesas de viagens em grupo (React Native, Expo e Firebase)",
+  "contributors": [
+    "Gonçalo Duarte da Costa Oliveira Dias",
+    "David Gomes Moreira"
+  ],
   "main": "index.js",
   "scripts": {
     "start": "expo start",
